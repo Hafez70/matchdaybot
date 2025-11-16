@@ -1,0 +1,235 @@
+"""
+Visual Feature Map - FIFA Match Tracking Bot
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                        📱 TELEGRAM BOT                               │
+│                     FIFA Match Tracking System                       │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  👤 USER FEATURES                                                    │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  /start                                                              │
+│    ├─► 📝 Register (first time)                                     │
+│    │    └─► Enter name → Registered!                                │
+│    │                                                                 │
+│    └─► 🏠 Main Menu (returning user)                                │
+│         ├─► ⚙️ Account Settings                                      │
+│         │    ├─► Edit Name                                          │
+│         │    └─► View Profile                                       │
+│         │                                                            │
+│         ├─► 🏆 My Leagues                                            │
+│         │    └─► [List of all leagues]                              │
+│         │         └─► Select League                                 │
+│         │              ├─► ⚽ Record Match                           │
+│         │              ├─► 📊 My Stats                              │
+│         │              ├─► 🏅 Leaderboard                           │
+│         │              ├─► 🎮 Recent Matches                        │
+│         │              └─► 👥 Members                                │
+│         │                                                            │
+│         ├─► ➕ Create League                                         │
+│         │    └─► Enter name → Get CODE (e.g., ABC123)               │
+│         │                                                            │
+│         ├─► 🔗 Join League                                           │
+│         │    └─► Enter CODE → Joined!                               │
+│         │                                                            │
+│         └─► ❓ Help                                                  │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  ⚽ MATCH RECORDING FLOW                                             │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Record Match                                                        │
+│    │                                                                 │
+│    ├─► Select Match Type:                                           │
+│    │    ├─► 1v1 (One vs One)                                        │
+│    │    ├─► 2v2 (Two vs Two)                                        │
+│    │    ├─► 1v2 (One vs Two) 🆕                                     │
+│    │    └─► 2v1 (Two vs One) 🆕                                     │
+│    │                                                                 │
+│    ├─► Select Team 1 Players                                        │
+│    │    └─► [Only league members shown]                             │
+│    │                                                                 │
+│    ├─► Select Team 2 Players                                        │
+│    │    └─► [Excludes Team 1 players]                               │
+│    │                                                                 │
+│    └─► Enter Result (e.g., 3-2)                                     │
+│         └─► ✅ Match Saved!                                          │
+│              ├─► Updated statistics                                 │
+│              └─► Updated leaderboard                                │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  🏆 LEAGUE SYSTEM                                                    │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  League Structure:                                                   │
+│                                                                      │
+│  ┌──────────────────────────────────────┐                          │
+│  │  League: "Office FIFA"               │                          │
+│  │  Code: ABC123                        │                          │
+│  │  Owner: 👑 John                       │                          │
+│  │                                      │                          │
+│  │  Members:                            │                          │
+│  │    • John (Owner)                    │                          │
+│  │    • Sara                            │                          │
+│  │    • Ahmed                           │                          │
+│  │    • Mary                            │                          │
+│  │                                      │                          │
+│  │  Statistics: [Per League]            │                          │
+│  │    • Total Matches: 45               │                          │
+│  │    • Total Goals: 187                │                          │
+│  │                                      │                          │
+│  │  Leaderboard:                        │                          │
+│  │    🥇 Sara    (15W-3L-2D) +24GD      │                          │
+│  │    🥈 John    (14W-5L-1D) +18GD      │                          │
+│  │    🥉 Ahmed   (12W-7L-1D) +12GD      │                          │
+│  │    4. Mary    (4W-15L-1D) -54GD      │                          │
+│  └──────────────────────────────────────┘                          │
+│                                                                      │
+│  User can be in multiple leagues:                                   │
+│                                                                      │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                │
+│  │  Office     │  │  Friends    │  │  Family     │                │
+│  │  League     │  │  League     │  │  League     │                │
+│  │  ABC123     │  │  XYZ789     │  │  FAM555     │                │
+│  └─────────────┘  └─────────────┘  └─────────────┘                │
+│                                                                      │
+│  Each league has independent:                                       │
+│    • Members                                                         │
+│    • Matches                                                         │
+│    • Statistics                                                      │
+│    • Leaderboard                                                     │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  📊 STATISTICS TRACKING                                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Per User, Per League:                                              │
+│                                                                      │
+│  ┌──────────────────────────────────────┐                          │
+│  │  📊 Stats for John in "Office FIFA"  │                          │
+│  │                                      │                          │
+│  │  🎮 Total Matches: 20                │                          │
+│  │  🏆 Wins: 14                         │                          │
+│  │  ❌ Losses: 5                         │                          │
+│  │  🤝 Draws: 1                          │                          │
+│  │                                      │                          │
+│  │  ⚽ Goals For: 52                     │                          │
+│  │  🥅 Goals Against: 34                 │                          │
+│  │  📈 Goal Difference: +18              │                          │
+│  │                                      │                          │
+│  │  📊 Win Rate: 70.0%                   │                          │
+│  └──────────────────────────────────────┘                          │
+│                                                                      │
+│  Same user in different league has different stats!                │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  🔒 SECURITY & PRIVACY                                               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ✅ User Identification                                              │
+│     └─► Telegram ID (unique, immutable)                             │
+│                                                                      │
+│  ✅ Name Editing                                                     │
+│     └─► Users can only edit their own names                         │
+│                                                                      │
+│  ✅ League Privacy                                                   │
+│     └─► Users only see data from their leagues                      │
+│                                                                      │
+│  ✅ Invite Control                                                   │
+│     └─► League codes control who can join                           │
+│                                                                      │
+│  ✅ Data Isolation                                                   │
+│     └─► Each league's data is independent                           │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  🚀 GETTING STARTED                                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  1️⃣ Install:                                                         │
+│     pip install -r requirements.txt                                 │
+│                                                                      │
+│  2️⃣ Configure:                                                       │
+│     Edit config.env with your TELEGRAM_BOT_TOKEN                    │
+│                                                                      │
+│  3️⃣ Run:                                                             │
+│     python main.py                                                  │
+│                                                                      │
+│  4️⃣ Use:                                                             │
+│     Send /start to your bot!                                        │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════
+
+                    🎮 MODULAR ARCHITECTURE 🏗️
+
+  ┌─────────────┐       ┌─────────────┐       ┌─────────────┐
+  │   Models    │◄──────┤  Services   │◄──────┤  Handlers   │
+  │             │       │             │       │             │
+  │ • User      │       │ • Database  │       │ • Regist.   │
+  │ • League    │       │ • User      │       │ • Account   │
+  │ • Match     │       │ • League    │       │ • League    │
+  │             │       │ • Match     │       │ • Match     │
+  └─────────────┘       └──────┬──────┘       └─────────────┘
+                               │
+                        ┌──────▼──────┐
+                        │ fifa_data   │
+                        │   .json     │
+                        └─────────────┘
+
+═══════════════════════════════════════════════════════════════════════
+
+                       📚 DOCUMENTATION MAP
+
+  ┌───────────────────────────────────────────────────────────┐
+  │  README_NEW.md          - Start here! Complete guide      │
+  │  QUICK_START.md         - Get running in 5 minutes        │
+  │  README_MODULAR.md      - Feature documentation           │
+  │  MIGRATION_GUIDE.md     - Migrate from old version        │
+  │  PROJECT_SUMMARY.md     - Detailed overview               │
+  │  ARCHITECTURE.md        - Technical architecture          │
+  │  TRANSFORMATION_COMPLETE.md - What changed summary        │
+  └───────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════
+
+                    ✅ IMPLEMENTATION STATUS
+
+  [✓] Modular project structure
+  [✓] User registration system
+  [✓] League system with invite codes
+  [✓] Name editing (own name only)
+  [✓] Match types: 1v1, 2v2, 1v2, 2v1
+  [✓] League scope filtering
+  [✓] Statistics per league
+  [✓] Leaderboards
+  [✓] Recent match history
+  [✓] Data migration script
+  [✓] Comprehensive documentation
+  [✓] Persian language support
+  [✓] Clean, maintainable code
+  [✓] Production ready
+
+═══════════════════════════════════════════════════════════════════════
+
+                    🎉 READY TO USE! 🎉
+
+             python main.py
+
+                 Happy Gaming! ⚽🏆
+
+═══════════════════════════════════════════════════════════════════════
+"""
+

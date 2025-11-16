@@ -1,0 +1,48 @@
+DEPLOYMENT STEPS FOR CPANEL:
+
+1. Upload files to cPanel:
+   - bot.py
+   - requirements.txt
+   - start.sh
+   - keep_alive.sh
+   - stop.sh
+   - .env.production (rename to .env after upload)
+   
+   Upload to: /home/xqaebsls/matchdaybot
+
+2. Connect to cPanel Terminal and run:
+
+   cd /home/xqaebsls/matchdaybot
+   chmod +x start.sh keep_alive.sh stop.sh
+
+3. Start the bot:
+
+   ./start.sh
+
+4. Setup Cron Job in cPanel:
+   - Go to cPanel → Cron Jobs
+   - Add new cron job:
+   
+   Minute: */5
+   Hour: *
+   Day: *
+   Month: *
+   Weekday: *
+   Command: /home/xqaebsls/matchdaybot/keep_alive.sh >> /home/xqaebsls/matchdaybot/cron.log 2>&1
+
+   This checks every 5 minutes if bot is alive.
+
+5. Check bot status:
+
+   tail -f /home/xqaebsls/matchdaybot/bot.log
+
+6. Stop bot if needed:
+
+   ./stop.sh
+
+NOTES:
+- Bot data saved in fifa_data.json
+- Logs in bot.log
+- Cron logs in cron.log
+- Make sure Python 3.8+ is installed on server
+
