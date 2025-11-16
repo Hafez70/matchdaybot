@@ -23,7 +23,7 @@ from src.handlers import (
 from src.config import States
 
 # Load environment variables
-load_dotenv()
+load_dotenv('config.env')
 
 # Logging setup
 logging.basicConfig(
