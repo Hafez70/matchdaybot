@@ -1,21 +1,24 @@
-"""Match recording handler"""
-from telegram import Update
+"""Match recording handler - Flexible team building"""
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 from .base_handler import BaseHandler
 from ..config import States
 
 
 class MatchHandler(BaseHandler):
-    """Handles match recording"""
+    """Handles match recording with flexible team building"""
     
     async def record_match_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        """Start match recording - first select league"""
+        """Start match recording - select Team 1 players"""
         query = update.callback_query
         await query.answer()
         
-        # Extract league code from callback data
+        # Extract league code
         league_code = query.data.split('_')[1]
         context.user_data['match_league'] = league_code
+        context.user_data['team1_players'] = []
+        context.user_data['team2_players'] = []
+        context.user_data['match_results'] = []
         
         league = self.league_service.get_league_by_code(league_code)
         if not league:
@@ -25,179 +28,144 @@ class MatchHandler(BaseHandler):
             )
             return ConversationHandler.END
         
-        # Check if league has enough members
+        # Check members
         if len(league.members) < 2:
             await query.edit_message_text(
-                "⚠️ لیگ باید حداقل 2 عضو داشته باشه!\n"
-                "ابتدا دوستانت رو دعوت کن.",
+                "⚠️ لیگ باید حداقل 2 عضو داشته باشه!",
                 reply_markup=self.keyboard.build_back_button(f'select_league_{league_code}')
             )
             return ConversationHandler.END
         
-        await query.edit_message_text(
-            f"⚽ ثبت مسابقه در لیگ {league.name}\n\n"
-            "نوع مسابقه رو انتخاب کن:",
-            reply_markup=self.keyboard.build_match_type_keyboard()
-        )
-        
-        return States.MATCH_SELECT_TYPE
-    
-    async def match_type_selected(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        """Handle match type selection"""
-        query = update.callback_query
-        await query.answer()
-        
-        match_type = query.data.replace('match_type_', '')
-        context.user_data['match_type'] = match_type
-        
-        league_code = context.user_data['match_league']
-        league = self.league_service.get_league_by_code(league_code)
-        
-        # Get players in this league
-        players = self.user_service.get_users_in_league(league_code)
-        player_list = [(p.telegram_id, p.name) for p in players]
-        
-        type_text = self._get_match_type_text(match_type)
-        
-        await query.edit_message_text(
-            f"✅ نوع مسابقه: {type_text}\n\n"
-            f"👤 بازیکن {'اول ' if match_type in ['2v2', '2v1'] else ''}تیم 1 رو انتخاب کن:",
-            reply_markup=self.keyboard.build_player_selection(
-                player_list,
-                'select_team1_p1'
-            )
-        )
-        
+        # Start team 1 selection
+        await self._show_team_selection(query, context, league_code, 1)
         return States.MATCH_TEAM1_P1
     
-    async def select_team1_player1(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        """Select first player of team 1"""
-        query = update.callback_query
-        await query.answer()
-        
-        telegram_id = int(query.data.replace('select_team1_p1_', ''))
-        context.user_data['team1_p1'] = telegram_id
-        
-        user = self.user_service.get_user_by_telegram_id(telegram_id)
-        match_type = context.user_data['match_type']
-        league_code = context.user_data['match_league']
-        
-        # Check if we need second player for team 1
-        if match_type in ['2v2', '2v1']:
-            players = self.user_service.get_users_in_league(league_code)
-            player_list = [(p.telegram_id, p.name) for p in players]
-            
-            await query.edit_message_text(
-                f"✅ تیم 1 - بازیکن 1: {user.name}\n\n"
-                f"👤 بازیکن دوم تیم 1 رو انتخاب کن:",
-                reply_markup=self.keyboard.build_player_selection(
-                    player_list,
-                    'select_team1_p2',
-                    exclude_ids=[telegram_id]
-                )
-            )
-            return States.MATCH_TEAM1_P2
-        else:
-            # Move to team 2
-            players = self.user_service.get_users_in_league(league_code)
-            player_list = [(p.telegram_id, p.name) for p in players]
-            
-            await query.edit_message_text(
-                f"✅ تیم 1: {user.name}\n\n"
-                f"👤 بازیکن {'اول ' if match_type == '1v2' else ''}تیم 2 رو انتخاب کن:",
-                reply_markup=self.keyboard.build_player_selection(
-                    player_list,
-                    'select_team2_p1',
-                    exclude_ids=[telegram_id]
-                )
-            )
-            return States.MATCH_TEAM2_P1
-    
-    async def select_team1_player2(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        """Select second player of team 1"""
-        query = update.callback_query
-        await query.answer()
-        
-        telegram_id = int(query.data.replace('select_team1_p2_', ''))
-        context.user_data['team1_p2'] = telegram_id
-        
-        user = self.user_service.get_user_by_telegram_id(telegram_id)
-        p1 = self.user_service.get_user_by_telegram_id(context.user_data['team1_p1'])
-        
-        league_code = context.user_data['match_league']
+    async def _show_team_selection(self, query, context, league_code: str, team_num: int):
+        """Show player selection for a team"""
         players = self.user_service.get_users_in_league(league_code)
-        player_list = [(p.telegram_id, p.name) for p in players]
         
-        exclude = [context.user_data['team1_p1'], telegram_id]
+        # Get already selected players
+        team1 = context.user_data.get('team1_players', [])
+        team2 = context.user_data.get('team2_players', [])
+        exclude_ids = team1 + team2
         
-        await query.edit_message_text(
-            f"✅ تیم 1: {p1.name} و {user.name}\n\n"
-            f"👤 بازیکن اول تیم 2 رو انتخاب کن:",
-            reply_markup=self.keyboard.build_player_selection(
-                player_list,
-                'select_team2_p1',
-                exclude_ids=exclude
-            )
-        )
+        # Build keyboard
+        keyboard = []
+        row = []
         
+        for player in players:
+            if player.telegram_id not in exclude_ids:
+                button = InlineKeyboardButton(
+                    f"👤 {player.name}",
+                    callback_data=f"select_team{team_num}_{player.telegram_id}"
+                )
+                row.append(button)
+                
+                if len(row) == 2:
+                    keyboard.append(row)
+                    row = []
+        
+        if row:
+            keyboard.append(row)
+        
+        # Add "Finish selection" button if at least one player selected
+        current_team = team1 if team_num == 1 else team2
+        if len(current_team) > 0:
+            keyboard.append([InlineKeyboardButton(
+                "✅ پایان انتخاب تیم",
+                callback_data=f"finish_team{team_num}"
+            )])
+        
+        keyboard.append([InlineKeyboardButton("❌ لغو", callback_data='cancel_operation')])
+        
+        # Build message
+        if team_num == 1:
+            selected = [self.user_service.get_user_by_telegram_id(tid).name for tid in team1]
+            text = f"⚽ انتخاب بازیکنان تیم 1 (حداکثر 2 نفر)\n\n"
+            if selected:
+                text += f"✅ انتخاب شده: {' و '.join(selected)}\n\n"
+            text += "👤 بازیکن بعدی رو انتخاب کن یا پایان انتخاب:"
+        else:
+            selected = [self.user_service.get_user_by_telegram_id(tid).name for tid in team2]
+            text = f"⚽ انتخاب بازیکنان تیم 2 (حداکثر 2 نفر)\n\n"
+            if selected:
+                text += f"✅ انتخاب شده: {' و '.join(selected)}\n\n"
+            text += "👤 بازیکن بعدی رو انتخاب کن یا پایان انتخاب:"
+        
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    async def select_team1_player(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Add player to team 1"""
+        query = update.callback_query
+        await query.answer()
+        
+        # Handle finish selection
+        if query.data == 'finish_team1':
+            return await self._start_team2_selection(query, context)
+        
+        # Get player ID
+        telegram_id = int(query.data.replace('select_team1_', ''))
+        
+        # Add to team1
+        team1 = context.user_data.get('team1_players', [])
+        
+        if len(team1) >= 2:
+            await query.answer("⚠️ حداکثر 2 بازیکن!", show_alert=True)
+            return States.MATCH_TEAM1_P1
+        
+        team1.append(telegram_id)
+        context.user_data['team1_players'] = team1
+        
+        # If 2 players selected, go to team 2
+        if len(team1) == 2:
+            return await self._start_team2_selection(query, context)
+        
+        # Show updated selection
+        league_code = context.user_data['match_league']
+        await self._show_team_selection(query, context, league_code, 1)
+        return States.MATCH_TEAM1_P1
+    
+    async def _start_team2_selection(self, query, context):
+        """Start team 2 selection"""
+        league_code = context.user_data['match_league']
+        await self._show_team_selection(query, context, league_code, 2)
         return States.MATCH_TEAM2_P1
     
-    async def select_team2_player1(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        """Select first player of team 2"""
+    async def select_team2_player(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Add player to team 2"""
         query = update.callback_query
         await query.answer()
         
-        telegram_id = int(query.data.replace('select_team2_p1_', ''))
-        context.user_data['team2_p1'] = telegram_id
-        
-        user = self.user_service.get_user_by_telegram_id(telegram_id)
-        match_type = context.user_data['match_type']
-        
-        # Check if we need second player for team 2
-        if match_type in ['2v2', '1v2']:
-            league_code = context.user_data['match_league']
-            players = self.user_service.get_users_in_league(league_code)
-            player_list = [(p.telegram_id, p.name) for p in players]
-            
-            exclude = [context.user_data['team1_p1'], 
-                      context.user_data.get('team1_p2'), 
-                      telegram_id]
-            exclude = [x for x in exclude if x is not None]
-            
-            await query.edit_message_text(
-                f"✅ تیم 2 - بازیکن 1: {user.name}\n\n"
-                f"👤 بازیکن دوم تیم 2 رو انتخاب کن:",
-                reply_markup=self.keyboard.build_player_selection(
-                    player_list,
-                    'select_team2_p2',
-                    exclude_ids=exclude
-                )
-            )
-            return States.MATCH_TEAM2_P2
-        else:
-            # Ready for result
+        # Handle finish selection
+        if query.data == 'finish_team2':
             return await self._show_result_prompt(query, context)
-    
-    async def select_team2_player2(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        """Select second player of team 2"""
-        query = update.callback_query
-        await query.answer()
         
-        telegram_id = int(query.data.replace('select_team2_p2_', ''))
-        context.user_data['team2_p2'] = telegram_id
+        # Get player ID
+        telegram_id = int(query.data.replace('select_team2_', ''))
         
-        return await self._show_result_prompt(query, context)
+        # Add to team2
+        team2 = context.user_data.get('team2_players', [])
+        
+        if len(team2) >= 2:
+            await query.answer("⚠️ حداکثر 2 بازیکن!", show_alert=True)
+            return States.MATCH_TEAM2_P1
+        
+        team2.append(telegram_id)
+        context.user_data['team2_players'] = team2
+        
+        # If 2 players selected, go to result
+        if len(team2) == 2:
+            return await self._show_result_prompt(query, context)
+        
+        # Show updated selection
+        league_code = context.user_data['match_league']
+        await self._show_team_selection(query, context, league_code, 2)
+        return States.MATCH_TEAM2_P1
     
     async def _show_result_prompt(self, query, context) -> int:
         """Show result input prompt"""
-        # Build team descriptions
-        team1_ids = [context.user_data['team1_p1']]
-        if 'team1_p2' in context.user_data:
-            team1_ids.append(context.user_data['team1_p2'])
-        
-        team2_ids = [context.user_data['team2_p1']]
-        if 'team2_p2' in context.user_data:
-            team2_ids.append(context.user_data['team2_p2'])
+        team1_ids = context.user_data['team1_players']
+        team2_ids = context.user_data['team2_players']
         
         team1_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in team1_ids]
         team2_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in team2_ids]
@@ -205,9 +173,17 @@ class MatchHandler(BaseHandler):
         team1_str = ' و '.join(team1_names)
         team2_str = ' و '.join(team2_names)
         
+        results = context.user_data.get('match_results', [])
+        results_text = ""
+        if results:
+            results_text = "\n\n📊 نتایج ثبت شده:\n"
+            for i, r in enumerate(results, 1):
+                results_text += f"{i}. {r['team1_score']}-{r['team2_score']}\n"
+        
         await query.edit_message_text(
             f"✅ تیم 1: {team1_str}\n"
-            f"✅ تیم 2: {team2_str}\n\n"
+            f"✅ تیم 2: {team2_str}"
+            f"{results_text}\n\n"
             f"⚽ نتیجه مسابقه رو وارد کن:\n"
             f"فرمت: گل_تیم1-گل_تیم2\n"
             f"مثال: 3-2",
@@ -241,47 +217,145 @@ class MatchHandler(BaseHandler):
             )
             return States.MATCH_RESULT
         
-        # Build teams
-        team1_ids = [context.user_data['team1_p1']]
-        if 'team1_p2' in context.user_data:
-            team1_ids.append(context.user_data['team1_p2'])
+        # Save result to context
+        results = context.user_data.get('match_results', [])
+        results.append({
+            'team1_score': team1_score,
+            'team2_score': team2_score
+        })
+        context.user_data['match_results'] = results
         
-        team2_ids = [context.user_data['team2_p1']]
-        if 'team2_p2' in context.user_data:
-            team2_ids.append(context.user_data['team2_p2'])
-        
-        # Save match
-        league_code = context.user_data['match_league']
-        match = self.match_service.create_match(
-            league_code=league_code,
-            team1=team1_ids,
-            team2=team2_ids,
-            team1_score=team1_score,
-            team2_score=team2_score
-        )
-        
-        # Build response
+        # Build teams info
+        team1_ids = context.user_data['team1_players']
+        team2_ids = context.user_data['team2_players']
         team1_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in team1_ids]
         team2_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in team2_ids]
-        
         team1_str = ' و '.join(team1_names)
         team2_str = ' و '.join(team2_names)
         
-        winner = match.get_winner()
-        winner_emoji = "🏆" if winner == 'team1' else "❌" if winner == 'team2' else "🤝"
+        winner_emoji = "🏆" if team1_score > team2_score else "❌" if team1_score < team2_score else "🤝"
         
-        league = self.league_service.get_league_by_code(league_code)
+        # Show result and ask for more
+        results_text = "\n📊 نتایج ثبت شده:\n"
+        for i, r in enumerate(results, 1):
+            emoji = "🏆" if r['team1_score'] > r['team2_score'] else "❌" if r['team1_score'] < r['team2_score'] else "🤝"
+            results_text += f"{i}. {emoji} {r['team1_score']}-{r['team2_score']}\n"
+        
+        keyboard = [
+            [InlineKeyboardButton("➕ ثبت نتیجه بعدی", callback_data='add_another_result')],
+            [InlineKeyboardButton("✅ پایان و ذخیره مسابقات", callback_data='finish_competition')],
+            [InlineKeyboardButton("❌ لغو", callback_data='cancel_operation')]
+        ]
         
         text = f"""
-✅ مسابقه با موفقیت ثبت شد!
+✅ نتیجه ثبت شد!
 
 {winner_emoji} {team1_str} {team1_score}-{team2_score} {team2_str}
 
-🏆 لیگ: {league.name}
-🎮 نوع: {match.match_type}
+{results_text}
+می‌خوای نتیجه بعدی رو ثبت کنی یا تمام مسابقات رو ذخیره کنی؟
 """
         
         await update.message.reply_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        return States.MATCH_CONTINUE
+    
+    async def add_another_result(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Add another result"""
+        query = update.callback_query
+        await query.answer()
+        
+        team1_ids = context.user_data['team1_players']
+        team2_ids = context.user_data['team2_players']
+        team1_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in team1_ids]
+        team2_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in team2_ids]
+        team1_str = ' و '.join(team1_names)
+        team2_str = ' و '.join(team2_names)
+        
+        results = context.user_data.get('match_results', [])
+        results_text = "\n📊 نتایج قبلی:\n"
+        for i, r in enumerate(results, 1):
+            emoji = "🏆" if r['team1_score'] > r['team2_score'] else "❌" if r['team1_score'] < r['team2_score'] else "🤝"
+            results_text += f"{i}. {emoji} {r['team1_score']}-{r['team2_score']}\n"
+        
+        await query.edit_message_text(
+            f"✅ تیم 1: {team1_str}\n"
+            f"✅ تیم 2: {team2_str}"
+            f"{results_text}\n\n"
+            f"⚽ نتیجه مسابقه بعدی رو وارد کن:\n"
+            f"فرمت: گل_تیم1-گل_تیم2\n"
+            f"مثال: 3-2",
+            reply_markup=self.keyboard.build_cancel_button()
+        )
+        
+        return States.MATCH_RESULT
+    
+    async def finish_competition(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Finish and save all matches"""
+        query = update.callback_query
+        await query.answer()
+        
+        league_code = context.user_data['match_league']
+        team1_ids = context.user_data['team1_players']
+        team2_ids = context.user_data['team2_players']
+        results = context.user_data['match_results']
+        
+        # Save each match
+        saved_count = 0
+        for result in results:
+            self.match_service.create_match(
+                league_code=league_code,
+                team1=team1_ids,
+                team2=team2_ids,
+                team1_score=result['team1_score'],
+                team2_score=result['team2_score']
+            )
+            saved_count += 1
+        
+        # Build summary
+        team1_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in team1_ids]
+        team2_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in team2_ids]
+        team1_str = ' و '.join(team1_names)
+        team2_str = ' و '.join(team2_names)
+        
+        league = self.league_service.get_league_by_code(league_code)
+        
+        # Calculate overall winner
+        team1_wins = sum(1 for r in results if r['team1_score'] > r['team2_score'])
+        team2_wins = sum(1 for r in results if r['team2_score'] > r['team1_score'])
+        draws = sum(1 for r in results if r['team1_score'] == r['team2_score'])
+        
+        results_text = "\n📊 نتایج نهایی:\n"
+        for i, r in enumerate(results, 1):
+            emoji = "🏆" if r['team1_score'] > r['team2_score'] else "❌" if r['team1_score'] < r['team2_score'] else "🤝"
+            results_text += f"{i}. {emoji} {r['team1_score']}-{r['team2_score']}\n"
+        
+        overall = f"\n🏅 نتیجه کلی:\n"
+        overall += f"🏆 برد {team1_str}: {team1_wins}\n"
+        overall += f"🏆 برد {team2_str}: {team2_wins}\n"
+        if draws > 0:
+            overall += f"🤝 مساوی: {draws}\n"
+        
+        if team1_wins > team2_wins:
+            overall += f"\n🎉 برنده کلی: {team1_str}"
+        elif team2_wins > team1_wins:
+            overall += f"\n🎉 برنده کلی: {team2_str}"
+        else:
+            overall += f"\n🤝 نتیجه کلی مساوی!"
+        
+        text = f"""
+✅ {saved_count} مسابقه با موفقیت ذخیره شد!
+
+🏆 لیگ: {league.name}
+👥 {team1_str} VS {team2_str}
+{results_text}
+{overall}
+"""
+        
+        await query.edit_message_text(
             text,
             reply_markup=self.keyboard.build_back_button(f'select_league_{league_code}')
         )
@@ -290,14 +364,3 @@ class MatchHandler(BaseHandler):
         context.user_data.clear()
         
         return ConversationHandler.END
-    
-    def _get_match_type_text(self, match_type: str) -> str:
-        """Get Persian text for match type"""
-        types = {
-            '1v1': 'تک نفره (1v1)',
-            '2v2': 'دو نفره (2v2)',
-            '1v2': 'یک به دو (1v2)',
-            '2v1': 'دو به یک (2v1)'
-        }
-        return types.get(match_type, match_type)
-

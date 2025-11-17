@@ -120,29 +120,23 @@ class FifaBot:
             entry_points=[CallbackQueryHandler(self.match_handler.record_match_start, 
                                               pattern='^league_.*_record_match$')],
             states={
-                States.MATCH_SELECT_TYPE: [
-                    CallbackQueryHandler(self.match_handler.match_type_selected, 
-                                       pattern='^match_type_')
-                ],
                 States.MATCH_TEAM1_P1: [
-                    CallbackQueryHandler(self.match_handler.select_team1_player1, 
-                                       pattern='^select_team1_p1_')
-                ],
-                States.MATCH_TEAM1_P2: [
-                    CallbackQueryHandler(self.match_handler.select_team1_player2, 
-                                       pattern='^select_team1_p2_')
+                    CallbackQueryHandler(self.match_handler.select_team1_player, 
+                                       pattern='^(select_team1_|finish_team1)')
                 ],
                 States.MATCH_TEAM2_P1: [
-                    CallbackQueryHandler(self.match_handler.select_team2_player1, 
-                                       pattern='^select_team2_p1_')
-                ],
-                States.MATCH_TEAM2_P2: [
-                    CallbackQueryHandler(self.match_handler.select_team2_player2, 
-                                       pattern='^select_team2_p2_')
+                    CallbackQueryHandler(self.match_handler.select_team2_player, 
+                                       pattern='^(select_team2_|finish_team2)')
                 ],
                 States.MATCH_RESULT: [
                     MessageHandler(filters.TEXT & ~filters.COMMAND, 
                                  self.match_handler.match_result)
+                ],
+                States.MATCH_CONTINUE: [
+                    CallbackQueryHandler(self.match_handler.add_another_result, 
+                                       pattern='^add_another_result$'),
+                    CallbackQueryHandler(self.match_handler.finish_competition, 
+                                       pattern='^finish_competition$')
                 ],
             },
             fallbacks=[CallbackQueryHandler(self.match_handler.cancel, 
