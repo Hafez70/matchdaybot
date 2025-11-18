@@ -16,9 +16,52 @@ class RegistrationHandler(BaseHandler):
         existing_user = self.get_user_or_none(user.id)
         
         if existing_user:
-            # User already registered, show main menu
+            # User already registered, show main menu with points
+            leagues = self.league_service.get_user_leagues(existing_user.telegram_id)
+            
+            welcome_text = f"🎮 منوی اصلی ⚽\n\n"
+            welcome_text += f"سلام {existing_user.name}!\n\n"
+            
+            if leagues:
+                welcome_text += "📊 امتیازات شما:\n"
+                welcome_text += "━━━━━━━━━━━━━━━━━\n\n"
+                
+                for league in leagues:
+                    leaderboard = self.match_service.get_league_leaderboard(
+                        league.code, 
+                        self.user_service
+                    )
+                    
+                    # Find user in leaderboard
+                    user_stats = next(
+                        (p for p in leaderboard if p['telegram_id'] == existing_user.telegram_id),
+                        None
+                    )
+                    
+                    if user_stats:
+                        points = user_stats['points']
+                        rank = user_stats['rank']
+                        
+                        # Determine rank suffix
+                        if rank == 1:
+                            rank_text = "نفر اول 🥇"
+                        elif rank == 2:
+                            rank_text = "نفر دوم 🥈"
+                        elif rank == 3:
+                            rank_text = "نفر سوم 🥉"
+                        else:
+                            rank_text = f"نفر {rank}"
+                        
+                        welcome_text += f"• {league.name}\n"
+                        welcome_text += f"  {points:+d} امتیاز | {rank_text}\n\n"
+                    else:
+                        welcome_text += f"• {league.name}\n"
+                        welcome_text += f"  0 امتیاز | بدون بازی\n\n"
+            else:
+                welcome_text += "شما هنوز عضو هیچ لیگی نیستید.\n"
+            
             await update.message.reply_text(
-                Messages.WELCOME.format(name=existing_user.name),
+                welcome_text,
                 reply_markup=self.keyboard.build_main_menu()
             )
             return ConversationHandler.END

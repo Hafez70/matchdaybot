@@ -360,7 +360,97 @@ class MatchHandler(BaseHandler):
             reply_markup=self.keyboard.build_back_button(f'select_league_{league_code}')
         )
         
+        # Send notifications to all participants
+        await self._send_match_notifications(query, context, team1_ids, team2_ids, results, league.name)
+        
         # Clear context
         context.user_data.clear()
         
         return ConversationHandler.END
+    
+    async def _send_match_notifications(self, query, context, team1_ids, team2_ids, results, league_name):
+        """Send match result notifications to participants"""
+        from telegram.error import TelegramError
+        
+        # Win/loss stickers (you can replace with your preferred sticker IDs)
+        WIN_STICKER = "CAACAgQAAxkBAAEMHx5nOQdKVoE_4i3AXZLgBFQAAUUIhg8AAtUTAALb4uxT6h2SmO5DdwI2BA"  # Victory/celebration
+        LOSS_STICKER = "CAACAgQAAxkBAAEMHyBnOQdZ8bxqAAHX6sBfmb3PW5gAAV4EAALmAAEZYH9P8IaYxY_I-tY2BA"  # Sad/loss
+        
+        # Calculate points for each player
+        player_results = {}
+        
+        for telegram_id in team1_ids + team2_ids:
+            wins = 0
+            losses = 0
+            draws = 0
+            
+            for result in results:
+                if telegram_id in team1_ids:
+                    if result['team1_score'] > result['team2_score']:
+                        wins += 1
+                    elif result['team1_score'] < result['team2_score']:
+                        losses += 1
+                    else:
+                        draws += 1
+                else:  # team2
+                    if result['team2_score'] > result['team1_score']:
+                        wins += 1
+                    elif result['team2_score'] < result['team1_score']:
+                        losses += 1
+                    else:
+                        draws += 1
+            
+            points = wins - losses
+            player_results[telegram_id] = {
+                'wins': wins,
+                'losses': losses,
+                'draws': draws,
+                'points': points
+            }
+        
+        # Send notification to each player
+        for telegram_id in team1_ids + team2_ids:
+            # Skip the user who recorded the match
+            if telegram_id == query.from_user.id:
+                continue
+            
+            try:
+                user = self.user_service.get_user_by_telegram_id(telegram_id)
+                stats = player_results[telegram_id]
+                
+                # Build message
+                team1_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in team1_ids]
+                team2_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in team2_ids]
+                team1_str = ' و '.join(team1_names)
+                team2_str = ' و '.join(team2_names)
+                
+                message = f"⚽ نتیجه مسابقات جدید در لیگ {league_name}\n\n"
+                message += f"👥 {team1_str} VS {team2_str}\n\n"
+                message += f"📊 نتایج:\n"
+                
+                for i, r in enumerate(results, 1):
+                    emoji = "🏆" if r['team1_score'] > r['team2_score'] else "❌" if r['team1_score'] < r['team2_score'] else "🤝"
+                    message += f"{i}. {emoji} {r['team1_score']}-{r['team2_score']}\n"
+                
+                message += f"\n📈 آمار شما:\n"
+                message += f"برد: {stats['wins']} | باخت: {stats['losses']} | مساوی: {stats['draws']}\n"
+                message += f"امتیاز کسب شده: {stats['points']:+d}"
+                
+                # Choose sticker based on overall performance
+                sticker = WIN_STICKER if stats['points'] > 0 else LOSS_STICKER
+                
+                # Send sticker
+                await context.bot.send_sticker(
+                    chat_id=telegram_id,
+                    sticker=sticker
+                )
+                
+                # Send message
+                await context.bot.send_message(
+                    chat_id=telegram_id,
+                    text=message
+                )
+                
+            except TelegramError as e:
+                # User might have blocked the bot or deleted account
+                continue

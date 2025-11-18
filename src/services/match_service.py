@@ -100,7 +100,7 @@ class MatchService:
         return sorted(matches, key=lambda m: m.datetime, reverse=True)[:limit]
     
     def get_league_leaderboard(self, league_code: str, user_service) -> List[Dict]:
-        """Get leaderboard for a league"""
+        """Get leaderboard for a league with points system"""
         from .user_service import UserService
         
         users = user_service.get_users_in_league(league_code)
@@ -109,13 +109,38 @@ class MatchService:
         for user in users:
             stats = self.get_player_stats(user.telegram_id, league_code)
             if stats['total_matches'] > 0:
+                # Calculate points: +1 win, -1 loss, 0 draw
+                points = stats['wins'] - stats['losses']
+                
                 leaderboard.append({
                     'name': user.name,
                     'telegram_id': user.telegram_id,
-                    **stats
+                    'points': points,
+                    'matches': stats['total_matches'],
+                    'wins': stats['wins'],
+                    'losses': stats['losses'],
+                    'draws': stats['draws'],
+                    'goal_difference': stats['goal_difference']
+                })
+            else:
+                # Player with no matches
+                leaderboard.append({
+                    'name': user.name,
+                    'telegram_id': user.telegram_id,
+                    'points': 0,
+                    'matches': 0,
+                    'wins': 0,
+                    'losses': 0,
+                    'draws': 0,
+                    'goal_difference': 0
                 })
         
-        # Sort by wins, then by goal difference
-        leaderboard.sort(key=lambda x: (x['wins'], x['goal_difference']), reverse=True)
+        # Sort by points, then goal difference, then wins
+        leaderboard.sort(key=lambda x: (x['points'], x['goal_difference'], x['wins']), reverse=True)
+        
+        # Add ranking
+        for i, player in enumerate(leaderboard, 1):
+            player['rank'] = i
+        
         return leaderboard
 

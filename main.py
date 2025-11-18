@@ -13,7 +13,7 @@ from telegram.ext import (
     filters
 )
 
-from src.services import DatabaseService
+from src.services import SQLiteDatabaseService
 from src.handlers import (
     RegistrationHandler,
     LeagueHandler,
@@ -34,14 +34,14 @@ logger = logging.getLogger(__name__)
 
 # Get settings
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-DATA_FILE = 'fifa_data.json'
+DB_FILE = 'fifa_bot.db'
 
 
 class FifaBot:
     """Main FIFA Bot Application"""
     
     def __init__(self):
-        self.db_service = DatabaseService(DATA_FILE)
+        self.db_service = SQLiteDatabaseService(DB_FILE)
         
         # Initialize handlers
         self.registration_handler = RegistrationHandler(self.db_service)

@@ -41,7 +41,13 @@ config.env
 
 # Database and logs
 fifa_data.json
+fifa_data.json.backup
 fifa_data_backup_*.json
+fifa_bot.db
+fifa_bot.db-journal
+*.sqlite
+*.sqlite3
+*.db
 *.log
 bot.log
 nohup.out

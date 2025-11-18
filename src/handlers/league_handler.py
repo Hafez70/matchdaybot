@@ -194,7 +194,7 @@ class LeagueHandler(BaseHandler):
         )
     
     async def show_league_leaderboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Show league leaderboard"""
+        """Show league leaderboard with points"""
         query = update.callback_query
         await query.answer()
         
@@ -212,26 +212,32 @@ class LeagueHandler(BaseHandler):
         
         leaderboard = self.match_service.get_league_leaderboard(league_code, self.user_service)
         
-        if not leaderboard:
+        if not leaderboard or all(p['matches'] == 0 for p in leaderboard):
             await query.edit_message_text(
                 f"📭 هنوز مسابقه‌ای در لیگ '{league.name}' ثبت نشده!",
                 reply_markup=self.keyboard.build_back_button(f'select_league_{league_code}')
             )
             return
         
-        text = f"🏅 جدول لیگ {league.name}:\n\n"
+        text = f"جدول لیگ {league.name}\n"
+        text += "━━━━━━━━━━━━━━━━━━━━━━\n\n"
         
-        for i, player in enumerate(leaderboard, 1):
-            emoji = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
-            text += f"{emoji} {player['name']}\n"
-            text += f"   🏆 {player['wins']} برد | "
-            text += f"❌ {player['losses']} باخت | "
-            text += f"⚽ {player['goal_difference']:+d} تفاضل\n\n"
+        for player in leaderboard:
+            if player['matches'] > 0:
+                rank_icon = "🥇" if player['rank'] == 1 else "🥈" if player['rank'] == 2 else "🥉" if player['rank'] == 3 else f"{player['rank']}."
+                
+                text += f"{rank_icon} {player['name']}\n"
+                text += f"   امتیاز: {player['points']:+d} | "
+                text += f"بازی: {player['matches']} | "
+                text += f"برد: {player['wins']} | "
+                text += f"باخت: {player['losses']}\n"
+                text += f"   تفاضل گل: {player['goal_difference']:+d}\n\n"
         
         await query.edit_message_text(
             text,
             reply_markup=self.keyboard.build_back_button(f'select_league_{league_code}')
         )
+
     
     async def show_recent_matches(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Show recent matches in league"""
