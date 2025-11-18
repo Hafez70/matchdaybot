@@ -454,11 +454,14 @@ class MatchHandler(BaseHandler):
                     # Choose sticker based on overall performance
                     sticker = WIN_STICKER if stats['points'] > 0 else LOSS_STICKER
                     
-                    # Send sticker
-                    await context.bot.send_sticker(
-                        chat_id=telegram_id,
-                        sticker=sticker
-                    )
+                    # Try to send sticker (optional, don't fail if it doesn't work)
+                    try:
+                        await context.bot.send_sticker(
+                            chat_id=telegram_id,
+                            sticker=sticker
+                        )
+                    except TelegramError:
+                        pass  # Sticker failed, but continue to send message
                     
                     # Send message with keyboard
                     await context.bot.send_message(
