@@ -266,7 +266,7 @@ class LeagueHandler(BaseHandler):
             return
         
         # Check if user is the league owner
-        is_owner = update.effective_user.id == league['owner_telegram_id']
+        is_owner = update.effective_user.id == league.owner_telegram_id
         
         text = f"🎮 آخرین مسابقات لیگ {league.name}:\n\n"
         
@@ -369,7 +369,7 @@ class LeagueHandler(BaseHandler):
             return
         
         # Verify user is owner
-        if update.effective_user.id != league['owner_telegram_id']:
+        if update.effective_user.id != league.owner_telegram_id:
             await query.answer("⚠️ فقط مالک لیگ می‌تواند مسابقات را مدیریت کند!", show_alert=True)
             return
         
@@ -547,7 +547,7 @@ class LeagueHandler(BaseHandler):
         league = self.league_service.get_league_by_code(league_code)
         
         # Verify user is owner
-        if update.effective_user.id != league['owner_telegram_id']:
+        if update.effective_user.id != league.owner_telegram_id:
             await query.answer("⚠️ فقط مالک لیگ می‌تواند مسابقات را حذف کند!", show_alert=True)
             return
         
