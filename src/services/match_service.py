@@ -53,7 +53,7 @@ class MatchService:
             result={'team1': team1_score, 'team2': team2_score}
         )
         
-        match_id = self.db.add_match(match.to_dict())
+        match_id = self.db.add_match(league_code, match_type, team1, team2, team1_score, team2_score)
         match.match_id = match_id
         return match
     
