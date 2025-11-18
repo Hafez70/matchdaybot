@@ -579,4 +579,300 @@ class LeagueHandler(BaseHandler):
         )
         
         return ConversationHandler.END
+    
+    # League Settings Handlers
+    async def show_league_settings(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Show league settings menu (owner only)"""
+        query = update.callback_query
+        await query.answer()
+        
+        league_code = query.data.replace('league_settings_', '')
+        league = self.league_service.get_league_by_code(league_code)
+        
+        if not league:
+            await query.edit_message_text(
+                "❌ لیگ پیدا نشد!",
+                reply_markup=self.keyboard.build_back_button()
+            )
+            return
+        
+        # Verify user is owner
+        if update.effective_user.id != league.owner_telegram_id:
+            await query.answer("⚠️ فقط مالک لیگ می‌تواند تنظیمات را تغییر دهد!", show_alert=True)
+            return
+        
+        text = f"""
+⚙️ تنظیمات لیگ {league.name}
+
+🔑 کد: `{league.code}`
+📝 نام فعلی: {league.name}
+🏆 GIF برد: {'✅ تنظیم شده' if league.winner_gif else '❌ تنظیم نشده'}
+❌ GIF باخت: {'✅ تنظیم شده' if league.loser_gif else '❌ تنظیم نشده'}
+
+از منوی زیر استفاده کن:
+"""
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=self.keyboard.build_league_settings_menu(league_code),
+            parse_mode='Markdown'
+        )
+    
+    async def edit_league_name_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Start editing league name"""
+        query = update.callback_query
+        await query.answer()
+        
+        league_code = query.data.replace('edit_league_name_', '')
+        league = self.league_service.get_league_by_code(league_code)
+        
+        if not league or update.effective_user.id != league.owner_telegram_id:
+            await query.answer("⚠️ خطا در دسترسی!", show_alert=True)
+            return ConversationHandler.END
+        
+        context.user_data['editing_league_code'] = league_code
+        
+        await query.edit_message_text(
+            f"✏️ ویرایش نام لیگ\n\nنام فعلی: {league.name}\n\nنام جدید را وارد کن:",
+            reply_markup=self.keyboard.build_cancel_button()
+        )
+        
+        return States.EDIT_LEAGUE_NAME
+    
+    async def edit_league_name_process(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Process new league name"""
+        new_name = update.message.text.strip()
+        league_code = context.user_data.get('editing_league_code')
+        
+        if not new_name or len(new_name) < 3:
+            await update.message.reply_text(
+                "⚠️ نام لیگ باید حداقل 3 حرف باشد!",
+                reply_markup=self.keyboard.build_cancel_button()
+            )
+            return States.EDIT_LEAGUE_NAME
+        
+        try:
+            success = self.db.update_league_name(league_code, new_name)
+            
+            if success:
+                await update.message.reply_text(
+                    f"✅ نام لیگ به '{new_name}' تغییر یافت!",
+                    reply_markup=self.keyboard.build_back_button(f'league_settings_{league_code}')
+                )
+            else:
+                await update.message.reply_text(
+                    "❌ خطا در تغییر نام لیگ!",
+                    reply_markup=self.keyboard.build_back_button(f'league_settings_{league_code}')
+                )
+        except Exception as e:
+            await update.message.reply_text(
+                f"❌ خطا: {str(e)}",
+                reply_markup=self.keyboard.build_back_button(f'league_settings_{league_code}')
+            )
+        
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    async def set_winner_gif_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Start setting winner GIF"""
+        query = update.callback_query
+        await query.answer()
+        
+        league_code = query.data.replace('set_winner_gif_', '')
+        league = self.league_service.get_league_by_code(league_code)
+        
+        if not league or update.effective_user.id != league.owner_telegram_id:
+            await query.answer("⚠️ خطا در دسترسی!", show_alert=True)
+            return ConversationHandler.END
+        
+        context.user_data['editing_league_code'] = league_code
+        context.user_data['gif_type'] = 'winner'
+        
+        await query.edit_message_text(
+            "🏆 تنظیم GIF برد\n\nیک GIF/انیمیشن ارسال کن یا لینک GIF را وارد کن:",
+            reply_markup=self.keyboard.build_cancel_button()
+        )
+        
+        return States.SET_WINNER_GIF
+    
+    async def set_loser_gif_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Start setting loser GIF"""
+        query = update.callback_query
+        await query.answer()
+        
+        league_code = query.data.replace('set_loser_gif_', '')
+        league = self.league_service.get_league_by_code(league_code)
+        
+        if not league or update.effective_user.id != league.owner_telegram_id:
+            await query.answer("⚠️ خطا در دسترسی!", show_alert=True)
+            return ConversationHandler.END
+        
+        context.user_data['editing_league_code'] = league_code
+        context.user_data['gif_type'] = 'loser'
+        
+        await query.edit_message_text(
+            "❌ تنظیم GIF باخت\n\nیک GIF/انیمیشن ارسال کن یا لینک GIF را وارد کن:",
+            reply_markup=self.keyboard.build_cancel_button()
+        )
+        
+        return States.SET_LOSER_GIF
+    
+    async def set_gif_process(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Process GIF input (animation or text URL)"""
+        league_code = context.user_data.get('editing_league_code')
+        gif_type = context.user_data.get('gif_type')  # 'winner' or 'loser'
+        
+        gif_url = None
+        
+        # Check if user sent an animation/document
+        if update.message.animation:
+            gif_url = update.message.animation.file_id
+        elif update.message.document and update.message.document.mime_type.startswith('image/gif'):
+            gif_url = update.message.document.file_id
+        elif update.message.text:
+            # User sent a URL
+            gif_url = update.message.text.strip()
+            if not (gif_url.startswith('http://') or gif_url.startswith('https://')):
+                await update.message.reply_text(
+                    "⚠️ لطفاً یک لینک معتبر (شروع با http:// یا https://) وارد کن یا یک GIF ارسال کن!",
+                    reply_markup=self.keyboard.build_cancel_button()
+                )
+                return States.SET_WINNER_GIF if gif_type == 'winner' else States.SET_LOSER_GIF
+        
+        if not gif_url:
+            await update.message.reply_text(
+                "⚠️ لطفاً یک GIF/انیمیشن ارسال کن یا لینک GIF را وارد کن!",
+                reply_markup=self.keyboard.build_cancel_button()
+            )
+            return States.SET_WINNER_GIF if gif_type == 'winner' else States.SET_LOSER_GIF
+        
+        try:
+            if gif_type == 'winner':
+                success = self.db.update_league_gifs(league_code, winner_gif=gif_url)
+                emoji = "🏆"
+                text = "برد"
+            else:
+                success = self.db.update_league_gifs(league_code, loser_gif=gif_url)
+                emoji = "❌"
+                text = "باخت"
+            
+            if success:
+                await update.message.reply_text(
+                    f"✅ GIF {text} با موفقیت تنظیم شد! {emoji}",
+                    reply_markup=self.keyboard.build_back_button(f'league_settings_{league_code}')
+                )
+            else:
+                await update.message.reply_text(
+                    f"❌ خطا در تنظیم GIF {text}!",
+                    reply_markup=self.keyboard.build_back_button(f'league_settings_{league_code}')
+                )
+        except Exception as e:
+            await update.message.reply_text(
+                f"❌ خطا: {str(e)}",
+                reply_markup=self.keyboard.build_back_button(f'league_settings_{league_code}')
+            )
+        
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    async def delete_league_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Ask for confirmation before deleting league"""
+        query = update.callback_query
+        await query.answer()
+        
+        league_code = query.data.replace('delete_league_', '')
+        league = self.league_service.get_league_by_code(league_code)
+        
+        if not league:
+            await query.edit_message_text(
+                "❌ لیگ پیدا نشد!",
+                reply_markup=self.keyboard.build_back_button()
+            )
+            return
+        
+        # Verify user is owner
+        if update.effective_user.id != league.owner_telegram_id:
+            await query.answer("⚠️ فقط مالک لیگ می‌تواند آن را حذف کند!", show_alert=True)
+            return
+        
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        
+        text = f"""
+⚠️ حذف لیگ {league.name}
+
+آیا مطمئنی که می‌خوای این لیگ رو حذف کنی؟
+
+🔴 تمام اطلاعات لیگ شامل:
+• اعضا ({len(league.members)} نفر)
+• تمام مسابقات
+• تمام آمار
+
+برای همیشه حذف خواهند شد!
+
+این عمل قابل بازگشت نیست!
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("✅ بله، حذف شود", callback_data=f'confirm_delete_league_{league_code}')],
+            [InlineKeyboardButton("❌ خیر، منصرف شدم", callback_data=f'league_settings_{league_code}')]
+        ]
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    
+    async def delete_league_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Execute league deletion"""
+        query = update.callback_query
+        await query.answer()
+        
+        league_code = query.data.replace('confirm_delete_league_', '')
+        league = self.league_service.get_league_by_code(league_code)
+        
+        if not league:
+            await query.edit_message_text(
+                "❌ لیگ پیدا نشد!",
+                reply_markup=self.keyboard.build_back_button()
+            )
+            return
+        
+        # Verify user is owner
+        if update.effective_user.id != league.owner_telegram_id:
+            await query.answer("⚠️ فقط مالک لیگ می‌تواند آن را حذف کند!", show_alert=True)
+            return
+        
+        try:
+            self.league_service.delete_league(league_code, update.effective_user.id)
+            
+            await query.edit_message_text(
+                f"✅ لیگ '{league.name}' با موفقیت حذف شد.",
+                reply_markup=self.keyboard.build_back_button('back_to_main_menu')
+            )
+        except Exception as e:
+            await query.edit_message_text(
+                f"❌ خطا در حذف لیگ: {str(e)}",
+                reply_markup=self.keyboard.build_back_button(f'league_settings_{league_code}')
+            )
+    
+    async def cancel_league_settings(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Cancel league settings operation"""
+        query = update.callback_query
+        await query.answer()
+        
+        league_code = context.user_data.get('editing_league_code')
+        context.user_data.clear()
+        
+        if league_code:
+            await query.edit_message_text(
+                "❌ عملیات لغو شد.",
+                reply_markup=self.keyboard.build_back_button(f'league_settings_{league_code}')
+            )
+        else:
+            await query.edit_message_text(
+                "❌ عملیات لغو شد.",
+                reply_markup=self.keyboard.build_back_button()
+            )
+        
+        return ConversationHandler.END
 
