@@ -120,4 +120,14 @@ class KeyboardBuilder:
             ]
         ]
         return InlineKeyboardMarkup(keyboard)
+    
+    @staticmethod
+    def build_league_update_menu(league_code: str) -> InlineKeyboardMarkup:
+        """Build league update notification menu"""
+        keyboard = [
+            [InlineKeyboardButton("🎮 مسابقات اخیر", callback_data=f'league_{league_code}_recent_matches')],
+            [InlineKeyboardButton("🏅 جدول لیگ", callback_data=f'league_{league_code}_leaderboard')],
+            [InlineKeyboardButton("🔙 منوی اصلی", callback_data='back_to_main_menu')]
+        ]
+        return InlineKeyboardMarkup(keyboard)
 
