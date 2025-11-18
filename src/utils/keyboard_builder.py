@@ -19,7 +19,7 @@ class KeyboardBuilder:
         return InlineKeyboardMarkup(keyboard)
     
     @staticmethod
-    def build_league_menu(league_code: str) -> InlineKeyboardMarkup:
+    def build_league_menu(league_code: str, is_owner: bool = False) -> InlineKeyboardMarkup:
         """Build league-specific menu"""
         keyboard = [
             [InlineKeyboardButton("⚽ ثبت مسابقه", callback_data=f'league_{league_code}_record_match')],
@@ -27,8 +27,13 @@ class KeyboardBuilder:
             [InlineKeyboardButton("📊 آمار من", callback_data=f'league_{league_code}_my_stats')],
             [InlineKeyboardButton("🏅 جدول لیگ", callback_data=f'league_{league_code}_leaderboard')],
             [InlineKeyboardButton("🎮 مسابقات اخیر", callback_data=f'league_{league_code}_recent_matches')],
-            [InlineKeyboardButton("🔙 بازگشت", callback_data='back_to_main_menu')]
         ]
+        
+        # Add settings and delete buttons for league owner
+        if is_owner:
+            keyboard.append([InlineKeyboardButton("⚙️ تنظیمات لیگ", callback_data=f'league_settings_{league_code}')])
+        
+        keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data='back_to_main_menu')])
         return InlineKeyboardMarkup(keyboard)
     
     @staticmethod
@@ -153,6 +158,18 @@ class KeyboardBuilder:
             [InlineKeyboardButton("✏️ ویرایش نتیجه", callback_data=f'edit_match_{league_code}_{match_id}')],
             [InlineKeyboardButton("🗑 حذف مسابقه", callback_data=f'delete_match_{league_code}_{match_id}')],
             [InlineKeyboardButton("🔙 بازگشت", callback_data=f'league_{league_code}_recent_matches')]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+    
+    @staticmethod
+    def build_league_settings_menu(league_code: str) -> InlineKeyboardMarkup:
+        """Build league settings menu for owners"""
+        keyboard = [
+            [InlineKeyboardButton("✏️ ویرایش نام لیگ", callback_data=f'edit_league_name_{league_code}')],
+            [InlineKeyboardButton("🏆 تنظیم GIF برد", callback_data=f'set_winner_gif_{league_code}')],
+            [InlineKeyboardButton("❌ تنظیم GIF باخت", callback_data=f'set_loser_gif_{league_code}')],
+            [InlineKeyboardButton("🗑 حذف لیگ", callback_data=f'delete_league_{league_code}')],
+            [InlineKeyboardButton("🔙 بازگشت", callback_data=f'select_league_{league_code}')]
         ]
         return InlineKeyboardMarkup(keyboard)
 

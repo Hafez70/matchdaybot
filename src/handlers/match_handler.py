@@ -372,10 +372,6 @@ class MatchHandler(BaseHandler):
         """Send match result notifications to all league members"""
         from telegram.error import TelegramError
         
-        # Win/loss stickers (you can replace with your preferred sticker IDs)
-        WIN_STICKER = "CAACAgQAAxkBAAEMHx5nOQdKVoE_4i3AXZLgBFQAAUUIhg8AAtUTAALb4uxT6h2SmO5DdwI2BA"  # Victory/celebration
-        LOSS_STICKER = "CAACAgQAAxkBAAEMHyBnOQdZ8bxqAAHX6sBfmb3PW5gAAV4EAALmAAEZYH9P8IaYxY_I-tY2BA"  # Sad/loss
-        
         league_code = context.user_data['match_league']
         league = self.league_service.get_league_by_code(league_code)
         
@@ -420,12 +416,6 @@ class MatchHandler(BaseHandler):
         team1_str = ' و '.join(team1_names)
         team2_str = ' و '.join(team2_names)
         
-        # Build results text
-        results_text = "📊 نتایج:\n"
-        for i, r in enumerate(results, 1):
-            emoji = "🏆" if r['team1_score'] > r['team2_score'] else "❌" if r['team1_score'] < r['team2_score'] else "🤝"
-            results_text += f"{i}. {emoji} {r['team1_score']}-{r['team2_score']}\n"
-        
         # Send notifications to ALL league members
         all_members = league.members
         
@@ -440,8 +430,22 @@ class MatchHandler(BaseHandler):
                 # Check if this user participated in the match
                 is_participant = telegram_id in team1_ids or telegram_id in team2_ids
                 
+                # Build results text based on player's perspective
+                results_text = "📊 نتایج:\n"
+                for i, r in enumerate(results, 1):
+                    if is_participant:
+                        # Show emoji from player's perspective
+                        if telegram_id in team1_ids:
+                            emoji = "🏆" if r['team1_score'] > r['team2_score'] else "❌" if r['team1_score'] < r['team2_score'] else "🤝"
+                        else:  # team2
+                            emoji = "🏆" if r['team2_score'] > r['team1_score'] else "❌" if r['team2_score'] < r['team1_score'] else "🤝"
+                    else:
+                        # Non-participant: show from team1 perspective (neutral)
+                        emoji = "🏆" if r['team1_score'] > r['team2_score'] else "❌" if r['team1_score'] < r['team2_score'] else "🤝"
+                    results_text += f"{i}. {emoji} {r['team1_score']}-{r['team2_score']}\n"
+                
                 if is_participant:
-                    # Send detailed message with personal stats and sticker
+                    # Send detailed message with personal stats and GIF
                     stats = player_results[telegram_id]
                     
                     message = f"⚽ نتیجه مسابقات جدید در لیگ {league_name}\n\n"
@@ -451,17 +455,22 @@ class MatchHandler(BaseHandler):
                     message += f"برد: {stats['wins']} | باخت: {stats['losses']} | مساوی: {stats['draws']}\n"
                     message += f"امتیاز کسب شده: {stats['points']:+d}"
                     
-                    # Choose sticker based on overall performance
-                    sticker = WIN_STICKER if stats['points'] > 0 else LOSS_STICKER
+                    # Choose GIF based on overall performance
+                    gif_url = None
+                    if stats['points'] > 0 and league.winner_gif:
+                        gif_url = league.winner_gif
+                    elif stats['points'] < 0 and league.loser_gif:
+                        gif_url = league.loser_gif
                     
-                    # Try to send sticker (optional, don't fail if it doesn't work)
-                    try:
-                        await context.bot.send_sticker(
-                            chat_id=telegram_id,
-                            sticker=sticker
-                        )
-                    except TelegramError:
-                        pass  # Sticker failed, but continue to send message
+                    # Try to send GIF/animation (optional, don't fail if it doesn't work)
+                    if gif_url:
+                        try:
+                            await context.bot.send_animation(
+                                chat_id=telegram_id,
+                                animation=gif_url
+                            )
+                        except TelegramError:
+                            pass  # GIF failed, but continue to send message
                     
                     # Send message with keyboard
                     await context.bot.send_message(

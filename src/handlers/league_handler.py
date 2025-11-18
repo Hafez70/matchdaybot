@@ -59,6 +59,7 @@ class LeagueHandler(BaseHandler):
         
         member_count = len(league.members)
         owner_user = self.user_service.get_user_by_telegram_id(league.owner_telegram_id)
+        is_owner = update.effective_user.id == league.owner_telegram_id
         
         text = f"""
 🏆 {league.name}
@@ -71,7 +72,7 @@ class LeagueHandler(BaseHandler):
         
         await query.edit_message_text(
             text,
-            reply_markup=self.keyboard.build_league_menu(league_code),
+            reply_markup=self.keyboard.build_league_menu(league_code, is_owner=is_owner),
             parse_mode='Markdown'
         )
     

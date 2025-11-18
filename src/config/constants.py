@@ -27,6 +27,11 @@ class States:
     
     # Match editing (for league owner)
     EDIT_MATCH_RESULT = 50
+    
+    # League settings (for league owner)
+    EDIT_LEAGUE_NAME = 60
+    SET_WINNER_GIF = 61
+    SET_LOSER_GIF = 62
 
 
 # Messages

@@ -14,6 +14,8 @@ class League:
     name: str
     owner_telegram_id: int
     members: List[int] = field(default_factory=list)  # List of telegram IDs
+    winner_gif: str = None  # URL or file_id for winner GIF
+    loser_gif: str = None  # URL or file_id for loser GIF
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     
     def to_dict(self) -> dict:
@@ -23,6 +25,8 @@ class League:
             'name': self.name,
             'owner_telegram_id': self.owner_telegram_id,
             'members': self.members,
+            'winner_gif': self.winner_gif,
+            'loser_gif': self.loser_gif,
             'created_at': self.created_at
         }
     
@@ -34,6 +38,8 @@ class League:
             name=data['name'],
             owner_telegram_id=data['owner_telegram_id'],
             members=data.get('members', []),
+            winner_gif=data.get('winner_gif'),
+            loser_gif=data.get('loser_gif'),
             created_at=data.get('created_at', datetime.now().isoformat())
         )
     

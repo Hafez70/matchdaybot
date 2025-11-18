@@ -51,6 +51,8 @@ class SQLiteDatabaseService:
                     code TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
                     owner_telegram_id INTEGER NOT NULL,
+                    winner_gif TEXT,
+                    loser_gif TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (owner_telegram_id) REFERENCES users(telegram_id)
                 )
@@ -113,6 +115,14 @@ class SQLiteDatabaseService:
                 CREATE INDEX IF NOT EXISTS idx_match_players_telegram 
                 ON match_players(telegram_id)
             """)
+            
+            # Migrate existing databases: add GIF columns if they don't exist
+            cursor.execute("PRAGMA table_info(leagues)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'winner_gif' not in columns:
+                cursor.execute("ALTER TABLE leagues ADD COLUMN winner_gif TEXT")
+            if 'loser_gif' not in columns:
+                cursor.execute("ALTER TABLE leagues ADD COLUMN loser_gif TEXT")
             
             logger.info("Database initialized successfully")
     
@@ -219,6 +229,53 @@ class SQLiteDatabaseService:
                 "INSERT OR IGNORE INTO league_members (league_code, telegram_id) VALUES (?, ?)",
                 (league_code, telegram_id)
             )
+    
+    def delete_league(self, league_code: str) -> bool:
+        """Delete a league and all associated data (members and matches)"""
+        with self.get_connection() as conn:
+            # Due to ON DELETE CASCADE in foreign keys:
+            # - league_members will be deleted automatically
+            # - matches will be deleted automatically
+            # - match_players will be deleted automatically (cascade from matches)
+            cursor = conn.execute(
+                "DELETE FROM leagues WHERE code = ?",
+                (league_code,)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def update_league_name(self, league_code: str, new_name: str) -> bool:
+        """Update league name"""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE leagues SET name = ? WHERE code = ?",
+                (new_name, league_code)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def update_league_gifs(self, league_code: str, winner_gif: str = None, loser_gif: str = None) -> bool:
+        """Update league GIF settings"""
+        with self.get_connection() as conn:
+            if winner_gif is not None and loser_gif is not None:
+                cursor = conn.execute(
+                    "UPDATE leagues SET winner_gif = ?, loser_gif = ? WHERE code = ?",
+                    (winner_gif, loser_gif, league_code)
+                )
+            elif winner_gif is not None:
+                cursor = conn.execute(
+                    "UPDATE leagues SET winner_gif = ? WHERE code = ?",
+                    (winner_gif, league_code)
+                )
+            elif loser_gif is not None:
+                cursor = conn.execute(
+                    "UPDATE leagues SET loser_gif = ? WHERE code = ?",
+                    (loser_gif, league_code)
+                )
+            else:
+                return False
+            conn.commit()
+            return cursor.rowcount > 0
     
     def get_user_leagues(self, telegram_id: int) -> List[Dict]:
         """Get all leagues a user is member of"""
