@@ -34,11 +34,11 @@ class Match:
         return cls(
             match_id=data.get('id', 0),
             league_code=data['league_code'],
-            match_type=data['type'],
+            match_type=data.get('type') or data.get('match_type'),  # Handle both 'type' and 'match_type'
             team1=data['team1'],
             team2=data['team2'],
             result=data['result'],
-            datetime=data.get('datetime', datetime.now().isoformat())
+            datetime=data.get('datetime') or data.get('created_at') or datetime.now().isoformat()
         )
     
     def get_winner(self) -> str:
