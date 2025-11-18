@@ -427,7 +427,7 @@ class MatchHandler(BaseHandler):
             results_text += f"{i}. {emoji} {r['team1_score']}-{r['team2_score']}\n"
         
         # Send notifications to ALL league members
-        all_members = league['members']
+        all_members = league.members
         
         for telegram_id in all_members:
             # Skip the user who recorded the match
