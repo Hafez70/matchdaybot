@@ -160,6 +160,23 @@ class SQLiteDatabaseService:
             return [dict(row) for row in cursor.fetchall()]
     
     # League operations
+    def get_all_leagues(self) -> List[Dict]:
+        """Get all leagues"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("SELECT * FROM leagues ORDER BY created_at DESC")
+            leagues = []
+            for row in cursor.fetchall():
+                league = dict(row)
+                
+                # Get members
+                cursor2 = conn.execute(
+                    "SELECT telegram_id FROM league_members WHERE league_code = ?",
+                    (league['code'],)
+                )
+                league['members'] = [r['telegram_id'] for r in cursor2.fetchall()]
+                leagues.append(league)
+            
+            return leagues
     def add_league(self, code: str, name: str, owner_telegram_id: int) -> None:
         """Create a new league"""
         with self.get_connection() as conn:
@@ -237,6 +254,45 @@ class SQLiteDatabaseService:
             return [row['telegram_id'] for row in cursor.fetchall()]
     
     # Match operations
+    def get_all_matches(self) -> List[Dict]:
+        """Get all matches"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT * FROM matches 
+                ORDER BY created_at DESC
+            """)
+            
+            matches = []
+            for row in cursor.fetchall():
+                match = dict(row)
+                match['datetime'] = match['created_at']  # Compatibility
+                
+                # Get team players
+                cursor2 = conn.execute("""
+                    SELECT telegram_id, team_number 
+                    FROM match_players 
+                    WHERE match_id = ?
+                """, (match['id'],))
+                
+                team1 = []
+                team2 = []
+                for player_row in cursor2.fetchall():
+                    if player_row['team_number'] == 1:
+                        team1.append(player_row['telegram_id'])
+                    else:
+                        team2.append(player_row['telegram_id'])
+                
+                match['team1'] = team1
+                match['team2'] = team2
+                match['result'] = {
+                    'team1': match['team1_score'],
+                    'team2': match['team2_score']
+                }
+                
+                matches.append(match)
+            
+            return matches
+    
     def add_match(self, league_code: str, match_type: str, team1: List[int], 
                   team2: List[int], team1_score: int, team2_score: int) -> int:
         """Add a match and return its ID"""
