@@ -10,6 +10,28 @@ class MatchService:
     def __init__(self, db: DatabaseService):
         self.db = db
     
+    def get_match_by_id(self, match_id: int) -> Optional[Match]:
+        """Get a match by its ID"""
+        matches = self.db.get_all_matches()
+        for match_data in matches:
+            if match_data.get('id') == match_id:
+                return Match.from_dict(match_data)
+        return None
+    
+    def update_match_score(self, match_id: int, team1_score: int, team2_score: int) -> bool:
+        """Update match score"""
+        try:
+            return self.db.update_match_score(match_id, team1_score, team2_score)
+        except Exception:
+            return False
+    
+    def delete_match(self, match_id: int) -> bool:
+        """Delete a match"""
+        try:
+            return self.db.delete_match(match_id)
+        except Exception:
+            return False
+    
     def create_match(
         self,
         league_code: str,

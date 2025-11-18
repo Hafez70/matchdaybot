@@ -130,4 +130,29 @@ class KeyboardBuilder:
             [InlineKeyboardButton("🔙 منوی اصلی", callback_data='back_to_main_menu')]
         ]
         return InlineKeyboardMarkup(keyboard)
+    
+    @staticmethod
+    def build_match_management_list(matches: List, league_code: str) -> InlineKeyboardMarkup:
+        """Build match list with management buttons for league owner"""
+        keyboard = []
+        
+        for match in matches[:10]:  # Limit to 10 matches
+            button_text = f"#{match.match_id}: {match.result['team1']}-{match.result['team2']}"
+            keyboard.append([InlineKeyboardButton(
+                button_text,
+                callback_data=f'manage_match_{league_code}_{match.match_id}'
+            )])
+        
+        keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data=f'select_league_{league_code}')])
+        return InlineKeyboardMarkup(keyboard)
+    
+    @staticmethod
+    def build_match_action_buttons(match_id: int, league_code: str) -> InlineKeyboardMarkup:
+        """Build edit/delete buttons for a match"""
+        keyboard = [
+            [InlineKeyboardButton("✏️ ویرایش نتیجه", callback_data=f'edit_match_{league_code}_{match_id}')],
+            [InlineKeyboardButton("🗑 حذف مسابقه", callback_data=f'delete_match_{league_code}_{match_id}')],
+            [InlineKeyboardButton("🔙 بازگشت", callback_data=f'league_{league_code}_recent_matches')]
+        ]
+        return InlineKeyboardMarkup(keyboard)
 

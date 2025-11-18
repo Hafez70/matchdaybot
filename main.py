@@ -150,6 +150,24 @@ class FifaBot:
         application.add_handler(edit_name_conv)
         application.add_handler(match_conv)
         
+        # Match editing conversation (for league owners)
+        edit_match_conv = ConversationHandler(
+            entry_points=[CallbackQueryHandler(self.league_handler.edit_match_start,
+                                              pattern='^edit_match_')],
+            states={
+                States.EDIT_MATCH_RESULT: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND,
+                                 self.league_handler.edit_match_result),
+                    CallbackQueryHandler(self.league_handler.cancel_edit,
+                                       pattern='^cancel_operation$')
+                ],
+            },
+            fallbacks=[CallbackQueryHandler(self.league_handler.cancel_edit,
+                                          pattern='^cancel_operation$')],
+        )
+        
+        application.add_handler(edit_match_conv)
+        
         # Simple callback handlers
         application.add_handler(CommandHandler('help', self.registration_handler.help_command))
         
@@ -201,6 +219,22 @@ class FifaBot:
         application.add_handler(CallbackQueryHandler(
             self.league_handler.show_my_stats, 
             pattern='^league_.*_my_stats$'
+        ))
+        
+        # Match management handlers (for league owners)
+        application.add_handler(CallbackQueryHandler(
+            self.league_handler.show_match_actions,
+            pattern='^manage_match_'
+        ))
+        
+        application.add_handler(CallbackQueryHandler(
+            self.league_handler.delete_match_confirm,
+            pattern='^delete_match_'
+        ))
+        
+        application.add_handler(CallbackQueryHandler(
+            self.league_handler.delete_match_execute,
+            pattern='^confirm_delete_match_'
         ))
 
 

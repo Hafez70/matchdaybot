@@ -408,4 +408,30 @@ class SQLiteDatabaseService:
                 matches.append(match)
             
             return matches
-
+    
+    def update_match_score(self, match_id: int, team1_score: int, team2_score: int) -> bool:
+        """Update match score"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute("""
+                    UPDATE matches 
+                    SET team1_score = ?, team2_score = ?
+                    WHERE id = ?
+                """, (team1_score, team2_score, match_id))
+                return True
+        except Exception as e:
+            logger.error(f"Error updating match score: {e}")
+            return False
+    
+    def delete_match(self, match_id: int) -> bool:
+        """Delete a match and its associated players"""
+        try:
+            with self.get_connection() as conn:
+                # Delete match players first (foreign key)
+                conn.execute("DELETE FROM match_players WHERE match_id = ?", (match_id,))
+                # Delete match
+                conn.execute("DELETE FROM matches WHERE id = ?", (match_id,))
+                return True
+        except Exception as e:
+            logger.error(f"Error deleting match: {e}")
+            return False

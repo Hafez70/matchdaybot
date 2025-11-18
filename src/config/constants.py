@@ -24,6 +24,9 @@ class States:
     MATCH_TEAM2_P2 = 45
     MATCH_RESULT = 46
     MATCH_CONTINUE = 47
+    
+    # Match editing (for league owner)
+    EDIT_MATCH_RESULT = 50
 
 
 # Messages

@@ -265,6 +265,9 @@ class LeagueHandler(BaseHandler):
             )
             return
         
+        # Check if user is the league owner
+        is_owner = update.effective_user.id == league['owner_telegram_id']
+        
         text = f"🎮 آخرین مسابقات لیگ {league.name}:\n\n"
         
         for i, match in enumerate(matches, 1):
@@ -283,10 +286,18 @@ class LeagueHandler(BaseHandler):
             text += f"{i}. {team1_str} {match.result['team1']}-{match.result['team2']} {team2_str} {winner_emoji}\n"
             text += f"   📅 {to_persian_date(match.datetime)} | {match.match_type}\n\n"
         
-        await query.edit_message_text(
-            text,
-            reply_markup=self.keyboard.build_back_button(f'select_league_{league_code}')
-        )
+        # If owner, show match management buttons
+        if is_owner:
+            text += "\n👑 شما مالک این لیگ هستید\nبرای ویرایش یا حذف مسابقه، آن را انتخاب کنید:"
+            await query.edit_message_text(
+                text,
+                reply_markup=self.keyboard.build_match_management_list(matches, league_code)
+            )
+        else:
+            await query.edit_message_text(
+                text,
+                reply_markup=self.keyboard.build_back_button(f'select_league_{league_code}')
+            )
     
     async def show_my_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Show user's stats in league"""
@@ -337,4 +348,234 @@ class LeagueHandler(BaseHandler):
             text,
             reply_markup=self.keyboard.build_back_button(f'select_league_{league_code}')
         )
+    
+    async def show_match_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Show edit/delete options for a specific match"""
+        query = update.callback_query
+        await query.answer()
+        
+        # Extract match_id and league_code from callback data
+        # Format: manage_match_{league_code}_{match_id}
+        parts = query.data.split('_')
+        league_code = parts[2]
+        match_id = int(parts[3])
+        
+        league = self.league_service.get_league_by_code(league_code)
+        if not league:
+            await query.edit_message_text(
+                "❌ لیگ پیدا نشد!",
+                reply_markup=self.keyboard.build_back_button()
+            )
+            return
+        
+        # Verify user is owner
+        if update.effective_user.id != league['owner_telegram_id']:
+            await query.answer("⚠️ فقط مالک لیگ می‌تواند مسابقات را مدیریت کند!", show_alert=True)
+            return
+        
+        # Get match details
+        match = self.match_service.get_match_by_id(match_id)
+        if not match:
+            await query.edit_message_text(
+                "❌ مسابقه پیدا نشد!",
+                reply_markup=self.keyboard.build_back_button(f'league_{league_code}_recent_matches')
+            )
+            return
+        
+        # Build match details text
+        team1_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in match.team1]
+        team2_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in match.team2]
+        team1_str = ' و '.join(team1_names)
+        team2_str = ' و '.join(team2_names)
+        
+        text = f"🎮 مدیریت مسابقه\n\n"
+        text += f"👥 {team1_str} VS {team2_str}\n"
+        text += f"📊 نتیجه: {match.result['team1']}-{match.result['team2']}\n"
+        text += f"📅 تاریخ: {to_persian_date(match.datetime)}\n"
+        text += f"🏆 نوع: {match.match_type}\n\n"
+        text += "چه عملیاتی می‌خواهید انجام دهید؟"
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=self.keyboard.build_match_action_buttons(match_id, league_code)
+        )
+    
+    async def edit_match_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Start editing a match"""
+        query = update.callback_query
+        await query.answer()
+        
+        # Extract match_id and league_code from callback data
+        # Format: edit_match_{league_code}_{match_id}
+        parts = query.data.split('_')
+        league_code = parts[2]
+        match_id = int(parts[3])
+        
+        match = self.match_service.get_match_by_id(match_id)
+        if not match:
+            await query.edit_message_text(
+                "❌ مسابقه پیدا نشد!",
+                reply_markup=self.keyboard.build_back_button(f'league_{league_code}_recent_matches')
+            )
+            return ConversationHandler.END
+        
+        # Store in context
+        context.user_data['editing_match_id'] = match_id
+        context.user_data['editing_league_code'] = league_code
+        
+        team1_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in match.team1]
+        team2_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in match.team2]
+        team1_str = ' و '.join(team1_names)
+        team2_str = ' و '.join(team2_names)
+        
+        text = f"✏️ ویرایش نتیجه مسابقه\n\n"
+        text += f"👥 {team1_str} VS {team2_str}\n"
+        text += f"📊 نتیجه فعلی: {match.result['team1']}-{match.result['team2']}\n\n"
+        text += f"⚽ نتیجه جدید را وارد کنید:\n"
+        text += f"فرمت: گل_تیم1-گل_تیم2\n"
+        text += f"مثال: 3-2"
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=self.keyboard.build_cancel_button()
+        )
+        
+        return States.EDIT_MATCH_RESULT
+    
+    async def edit_match_result(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Process new match result"""
+        result_text = update.message.text.strip()
+        
+        try:
+            parts = result_text.split('-')
+            if len(parts) != 2:
+                raise ValueError()
+            
+            team1_score = int(parts[0].strip())
+            team2_score = int(parts[1].strip())
+            
+            if team1_score < 0 or team2_score < 0:
+                raise ValueError()
+        
+        except ValueError:
+            await update.message.reply_text(
+                "❌ فرمت نتیجه اشتباه است!\n"
+                "لطفاً به فرمت 'عدد-عدد' وارد کنید\n"
+                "مثال: 3-2",
+                reply_markup=self.keyboard.build_cancel_button()
+            )
+            return States.EDIT_MATCH_RESULT
+        
+        match_id = context.user_data['editing_match_id']
+        league_code = context.user_data['editing_league_code']
+        
+        # Update match
+        success = self.match_service.update_match_score(match_id, team1_score, team2_score)
+        
+        if success:
+            match = self.match_service.get_match_by_id(match_id)
+            team1_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in match.team1]
+            team2_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in match.team2]
+            team1_str = ' و '.join(team1_names)
+            team2_str = ' و '.join(team2_names)
+            
+            await update.message.reply_text(
+                f"✅ نتیجه مسابقه با موفقیت ویرایش شد!\n\n"
+                f"👥 {team1_str} VS {team2_str}\n"
+                f"📊 نتیجه جدید: {team1_score}-{team2_score}",
+                reply_markup=self.keyboard.build_back_button(f'league_{league_code}_recent_matches')
+            )
+        else:
+            await update.message.reply_text(
+                "❌ خطا در ویرایش مسابقه!",
+                reply_markup=self.keyboard.build_back_button(f'league_{league_code}_recent_matches')
+            )
+        
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    async def delete_match_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Ask for confirmation before deleting a match"""
+        query = update.callback_query
+        await query.answer()
+        
+        # Extract match_id and league_code from callback data
+        # Format: delete_match_{league_code}_{match_id}
+        parts = query.data.split('_')
+        league_code = parts[2]
+        match_id = int(parts[3])
+        
+        match = self.match_service.get_match_by_id(match_id)
+        if not match:
+            await query.edit_message_text(
+                "❌ مسابقه پیدا نشد!",
+                reply_markup=self.keyboard.build_back_button(f'league_{league_code}_recent_matches')
+            )
+            return
+        
+        team1_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in match.team1]
+        team2_names = [self.user_service.get_user_by_telegram_id(tid).name for tid in match.team2]
+        team1_str = ' و '.join(team1_names)
+        team2_str = ' و '.join(team2_names)
+        
+        text = f"⚠️ تأیید حذف مسابقه\n\n"
+        text += f"👥 {team1_str} VS {team2_str}\n"
+        text += f"📊 نتیجه: {match.result['team1']}-{match.result['team2']}\n"
+        text += f"📅 تاریخ: {to_persian_date(match.datetime)}\n\n"
+        text += "⚠️ این عملیات غیرقابل بازگشت است!\n"
+        text += "آیا مطمئن هستید؟"
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=self.keyboard.build_yes_no(
+                f'confirm_delete_match_{league_code}_{match_id}',
+                f'manage_match_{league_code}_{match_id}'
+            )
+        )
+    
+    async def delete_match_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Execute match deletion"""
+        query = update.callback_query
+        await query.answer()
+        
+        # Extract match_id and league_code from callback data
+        # Format: confirm_delete_match_{league_code}_{match_id}
+        parts = query.data.split('_')
+        league_code = parts[3]
+        match_id = int(parts[4])
+        
+        league = self.league_service.get_league_by_code(league_code)
+        
+        # Verify user is owner
+        if update.effective_user.id != league['owner_telegram_id']:
+            await query.answer("⚠️ فقط مالک لیگ می‌تواند مسابقات را حذف کند!", show_alert=True)
+            return
+        
+        success = self.match_service.delete_match(match_id)
+        
+        if success:
+            await query.edit_message_text(
+                "✅ مسابقه با موفقیت حذف شد!",
+                reply_markup=self.keyboard.build_back_button(f'league_{league_code}_recent_matches')
+            )
+        else:
+            await query.edit_message_text(
+                "❌ خطا در حذف مسابقه!",
+                reply_markup=self.keyboard.build_back_button(f'league_{league_code}_recent_matches')
+            )
+    
+    async def cancel_edit(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Cancel match editing"""
+        query = update.callback_query
+        await query.answer()
+        
+        league_code = context.user_data.get('editing_league_code')
+        context.user_data.clear()
+        
+        await query.edit_message_text(
+            "❌ عملیات لغو شد.",
+            reply_markup=self.keyboard.build_back_button(f'league_{league_code}_recent_matches')
+        )
+        
+        return ConversationHandler.END
 
