@@ -168,6 +168,56 @@ class FifaBot:
         
         application.add_handler(edit_match_conv)
         
+        # League settings conversations (for league owners)
+        edit_league_name_conv = ConversationHandler(
+            entry_points=[CallbackQueryHandler(self.league_handler.edit_league_name_start,
+                                              pattern='^edit_league_name_')],
+            states={
+                States.EDIT_LEAGUE_NAME: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND,
+                                 self.league_handler.edit_league_name_process),
+                    CallbackQueryHandler(self.league_handler.cancel_league_settings,
+                                       pattern='^cancel_operation$')
+                ],
+            },
+            fallbacks=[CallbackQueryHandler(self.league_handler.cancel_league_settings,
+                                          pattern='^cancel_operation$')],
+        )
+        
+        set_winner_gif_conv = ConversationHandler(
+            entry_points=[CallbackQueryHandler(self.league_handler.set_winner_gif_start,
+                                              pattern='^set_winner_gif_')],
+            states={
+                States.SET_WINNER_GIF: [
+                    MessageHandler((filters.TEXT | filters.ANIMATION | filters.Document.MimeType('image/gif')) & ~filters.COMMAND,
+                                 self.league_handler.set_gif_process),
+                    CallbackQueryHandler(self.league_handler.cancel_league_settings,
+                                       pattern='^cancel_operation$')
+                ],
+            },
+            fallbacks=[CallbackQueryHandler(self.league_handler.cancel_league_settings,
+                                          pattern='^cancel_operation$')],
+        )
+        
+        set_loser_gif_conv = ConversationHandler(
+            entry_points=[CallbackQueryHandler(self.league_handler.set_loser_gif_start,
+                                              pattern='^set_loser_gif_')],
+            states={
+                States.SET_LOSER_GIF: [
+                    MessageHandler((filters.TEXT | filters.ANIMATION | filters.Document.MimeType('image/gif')) & ~filters.COMMAND,
+                                 self.league_handler.set_gif_process),
+                    CallbackQueryHandler(self.league_handler.cancel_league_settings,
+                                       pattern='^cancel_operation$')
+                ],
+            },
+            fallbacks=[CallbackQueryHandler(self.league_handler.cancel_league_settings,
+                                          pattern='^cancel_operation$')],
+        )
+        
+        application.add_handler(edit_league_name_conv)
+        application.add_handler(set_winner_gif_conv)
+        application.add_handler(set_loser_gif_conv)
+        
         # Simple callback handlers
         application.add_handler(CommandHandler('help', self.registration_handler.help_command))
         
@@ -235,6 +285,22 @@ class FifaBot:
         application.add_handler(CallbackQueryHandler(
             self.league_handler.delete_match_execute,
             pattern='^confirm_delete_match_'
+        ))
+        
+        # League settings handlers (for league owners)
+        application.add_handler(CallbackQueryHandler(
+            self.league_handler.show_league_settings,
+            pattern='^league_settings_'
+        ))
+        
+        application.add_handler(CallbackQueryHandler(
+            self.league_handler.delete_league_confirm,
+            pattern='^delete_league_'
+        ))
+        
+        application.add_handler(CallbackQueryHandler(
+            self.league_handler.delete_league_execute,
+            pattern='^confirm_delete_league_'
         ))
 
 
