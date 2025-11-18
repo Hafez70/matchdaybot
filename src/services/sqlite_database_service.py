@@ -53,6 +53,7 @@ class SQLiteDatabaseService:
                     owner_telegram_id INTEGER NOT NULL,
                     winner_gif TEXT,
                     loser_gif TEXT,
+                    archived INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (owner_telegram_id) REFERENCES users(telegram_id)
                 )
@@ -277,15 +278,43 @@ class SQLiteDatabaseService:
             conn.commit()
             return cursor.rowcount > 0
     
-    def get_user_leagues(self, telegram_id: int) -> List[Dict]:
-        """Get all leagues a user is member of"""
+    def archive_league(self, league_code: str) -> bool:
+        """Archive a league (hide but keep data)"""
         with self.get_connection() as conn:
-            cursor = conn.execute("""
-                SELECT l.* FROM leagues l
-                JOIN league_members lm ON l.code = lm.league_code
-                WHERE lm.telegram_id = ?
-                ORDER BY l.created_at DESC
-            """, (telegram_id,))
+            cursor = conn.execute(
+                "UPDATE leagues SET archived = 1 WHERE code = ?",
+                (league_code,)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def unarchive_league(self, league_code: str) -> bool:
+        """Unarchive a league (make visible again)"""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE leagues SET archived = 0 WHERE code = ?",
+                (league_code,)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def get_user_leagues(self, telegram_id: int, include_archived: bool = False) -> List[Dict]:
+        """Get all leagues a user is member of (excluding archived by default)"""
+        with self.get_connection() as conn:
+            if include_archived:
+                cursor = conn.execute("""
+                    SELECT l.* FROM leagues l
+                    JOIN league_members lm ON l.code = lm.league_code
+                    WHERE lm.telegram_id = ?
+                    ORDER BY l.created_at DESC
+                """, (telegram_id,))
+            else:
+                cursor = conn.execute("""
+                    SELECT l.* FROM leagues l
+                    JOIN league_members lm ON l.code = lm.league_code
+                    WHERE lm.telegram_id = ? AND l.archived = 0
+                    ORDER BY l.created_at DESC
+                """, (telegram_id,))
             
             leagues = []
             for row in cursor.fetchall():

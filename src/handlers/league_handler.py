@@ -608,13 +608,14 @@ class LeagueHandler(BaseHandler):
 📝 نام فعلی: {league.name}
 🏆 GIF برد: {'✅ تنظیم شده' if league.winner_gif else '❌ تنظیم نشده'}
 ❌ GIF باخت: {'✅ تنظیم شده' if league.loser_gif else '❌ تنظیم نشده'}
+📦 وضعیت: {'آرشیو شده' if league.archived else 'فعال'}
 
 از منوی زیر استفاده کن:
 """
         
         await query.edit_message_text(
             text,
-            reply_markup=self.keyboard.build_league_settings_menu(league_code),
+            reply_markup=self.keyboard.build_league_settings_menu(league_code, is_archived=league.archived),
             parse_mode='Markdown'
         )
     
@@ -875,4 +876,82 @@ class LeagueHandler(BaseHandler):
             )
         
         return ConversationHandler.END
+    
+    async def archive_league(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Archive a league (owner only)"""
+        query = update.callback_query
+        await query.answer()
+        
+        league_code = query.data.replace('archive_league_', '')
+        league = self.league_service.get_league_by_code(league_code)
+        
+        if not league:
+            await query.edit_message_text(
+                "❌ لیگ پیدا نشد!",
+                reply_markup=self.keyboard.build_back_button()
+            )
+            return
+        
+        # Verify user is owner
+        if update.effective_user.id != league.owner_telegram_id:
+            await query.answer("⚠️ فقط مالک لیگ می‌تواند آن را آرشیو کند!", show_alert=True)
+            return
+        
+        try:
+            success = self.db.archive_league(league_code)
+            
+            if success:
+                await query.edit_message_text(
+                    f"✅ لیگ '{league.name}' آرشیو شد!\n\nلیگ آرشیو شده از لیست لیگ‌های فعال حذف می‌شود اما تمام اطلاعات آن نگهداری می‌شود.\n\nمی‌توانید از بخش تنظیمات آن را دوباره فعال کنید.",
+                    reply_markup=self.keyboard.build_back_button('back_to_main_menu')
+                )
+            else:
+                await query.edit_message_text(
+                    "❌ خطا در آرشیو کردن لیگ!",
+                    reply_markup=self.keyboard.build_back_button(f'league_settings_{league_code}')
+                )
+        except Exception as e:
+            await query.edit_message_text(
+                f"❌ خطا: {str(e)}",
+                reply_markup=self.keyboard.build_back_button(f'league_settings_{league_code}')
+            )
+    
+    async def unarchive_league(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Unarchive a league (owner only)"""
+        query = update.callback_query
+        await query.answer()
+        
+        league_code = query.data.replace('unarchive_league_', '')
+        league = self.league_service.get_league_by_code(league_code)
+        
+        if not league:
+            await query.edit_message_text(
+                "❌ لیگ پیدا نشد!",
+                reply_markup=self.keyboard.build_back_button()
+            )
+            return
+        
+        # Verify user is owner
+        if update.effective_user.id != league.owner_telegram_id:
+            await query.answer("⚠️ فقط مالک لیگ می‌تواند آن را فعال کند!", show_alert=True)
+            return
+        
+        try:
+            success = self.db.unarchive_league(league_code)
+            
+            if success:
+                await query.edit_message_text(
+                    f"✅ لیگ '{league.name}' فعال شد!\n\nلیگ دوباره در لیست لیگ‌های فعال شما نمایش داده خواهد شد.",
+                    reply_markup=self.keyboard.build_back_button(f'league_settings_{league_code}')
+                )
+            else:
+                await query.edit_message_text(
+                    "❌ خطا در فعال کردن لیگ!",
+                    reply_markup=self.keyboard.build_back_button(f'league_settings_{league_code}')
+                )
+        except Exception as e:
+            await query.edit_message_text(
+                f"❌ خطا: {str(e)}",
+                reply_markup=self.keyboard.build_back_button(f'league_settings_{league_code}')
+            )
 

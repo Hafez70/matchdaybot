@@ -16,6 +16,7 @@ class League:
     members: List[int] = field(default_factory=list)  # List of telegram IDs
     winner_gif: str = None  # URL or file_id for winner GIF
     loser_gif: str = None  # URL or file_id for loser GIF
+    archived: bool = False  # Whether the league is archived
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     
     def to_dict(self) -> dict:
@@ -27,6 +28,7 @@ class League:
             'members': self.members,
             'winner_gif': self.winner_gif,
             'loser_gif': self.loser_gif,
+            'archived': self.archived,
             'created_at': self.created_at
         }
     
@@ -40,6 +42,7 @@ class League:
             members=data.get('members', []),
             winner_gif=data.get('winner_gif'),
             loser_gif=data.get('loser_gif'),
+            archived=bool(data.get('archived', 0)),  # Convert 0/1 to False/True
             created_at=data.get('created_at', datetime.now().isoformat())
         )
     

@@ -162,14 +162,22 @@ class KeyboardBuilder:
         return InlineKeyboardMarkup(keyboard)
     
     @staticmethod
-    def build_league_settings_menu(league_code: str) -> InlineKeyboardMarkup:
+    def build_league_settings_menu(league_code: str, is_archived: bool = False) -> InlineKeyboardMarkup:
         """Build league settings menu for owners"""
         keyboard = [
             [InlineKeyboardButton("✏️ ویرایش نام لیگ", callback_data=f'edit_league_name_{league_code}')],
             [InlineKeyboardButton("🏆 تنظیم GIF برد", callback_data=f'set_winner_gif_{league_code}')],
             [InlineKeyboardButton("❌ تنظیم GIF باخت", callback_data=f'set_loser_gif_{league_code}')],
-            [InlineKeyboardButton("🗑 حذف لیگ", callback_data=f'delete_league_{league_code}')],
-            [InlineKeyboardButton("🔙 بازگشت", callback_data=f'select_league_{league_code}')]
         ]
+        
+        # Archive/Unarchive button
+        if is_archived:
+            keyboard.append([InlineKeyboardButton("📂 فعال کردن لیگ", callback_data=f'unarchive_league_{league_code}')])
+        else:
+            keyboard.append([InlineKeyboardButton("📦 آرشیو کردن لیگ", callback_data=f'archive_league_{league_code}')])
+        
+        keyboard.append([InlineKeyboardButton("🗑 حذف لیگ", callback_data=f'delete_league_{league_code}')])
+        keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data=f'select_league_{league_code}')])
+        
         return InlineKeyboardMarkup(keyboard)
 
