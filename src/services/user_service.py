@@ -73,12 +73,16 @@ class UserService:
     
     def get_users_in_league(self, league_code: str) -> List[User]:
         """Get all users in a specific league"""
-        users = self.db.get_all_users()
+        # Get member telegram IDs from database
+        member_ids = self.db.get_league_members(league_code)
+        
+        # Get user objects for these IDs
         league_users = []
-        for user_data in users:
-            user = User.from_dict(user_data)
-            if user.is_in_league(league_code):
+        for telegram_id in member_ids:
+            user = self.get_user_by_telegram_id(telegram_id)
+            if user:
                 league_users.append(user)
+        
         return league_users
     
     def get_all_users(self) -> List[User]:
