@@ -31,7 +31,7 @@ class LeagueService:
             members=[owner_telegram_id]  # Owner is automatically a member
         )
         
-        self.db.add_league(league.to_dict())
+        self.db.add_league(code, name, owner_telegram_id)
         return league
     
     def _generate_unique_code(self) -> str:
@@ -47,8 +47,11 @@ class LeagueService:
         if not league:
             raise ValueError("لیگ با این کد پیدا نشد!")
         
+        # Add member to database
+        self.db.add_league_member(league_code, telegram_id)
+        
+        # Update league object
         league.add_member(telegram_id)
-        self.db.update_league(league.code, league.to_dict())
         return league
     
     def get_user_leagues(self, telegram_id: int) -> List[League]:

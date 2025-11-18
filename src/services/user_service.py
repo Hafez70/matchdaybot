@@ -44,7 +44,7 @@ class UserService:
         
         # Create new user
         user = User(telegram_id=telegram_id, name=name)
-        self.db.add_user(user.to_dict())
+        self.db.add_user(telegram_id, name)
         return user
     
     def update_user_name(self, telegram_id: int, new_name: str) -> User:
@@ -59,17 +59,14 @@ class UserService:
             raise ValueError(f"نام '{new_name}' قبلاً توسط کاربر دیگری استفاده شده است!")
         
         user.name = new_name
-        self.db.update_user(telegram_id, user.to_dict())
+        self.db.update_user_name(telegram_id, new_name)
         return user
     
     def add_league_to_user(self, telegram_id: int, league_code: str) -> None:
-        """Add a league to user's leagues"""
-        user = self.get_user_by_telegram_id(telegram_id)
-        if not user:
-            raise ValueError("کاربر پیدا نشد!")
-        
-        user.add_league(league_code)
-        self.db.update_user(telegram_id, user.to_dict())
+        """Add a league to user's leagues (SQLite: handled by league_members table)"""
+        # For SQLite, league membership is stored in league_members table
+        # This method is kept for compatibility but does nothing
+        pass
     
     def get_users_in_league(self, league_code: str) -> List[User]:
         """Get all users in a specific league"""
