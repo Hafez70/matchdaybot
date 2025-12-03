@@ -195,7 +195,7 @@ class LeagueHandler(BaseHandler):
         )
     
     async def show_league_leaderboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Show league leaderboard with points"""
+        """Show league leaderboard with points (only active players with 20%+ participation)"""
         query = update.callback_query
         await query.answer()
         
@@ -220,19 +220,42 @@ class LeagueHandler(BaseHandler):
             )
             return
         
-        text = f"جدول لیگ {league.name}\n"
-        text += "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        # Find maximum matches played by any player
+        max_matches = max(p['matches'] for p in leaderboard)
         
-        for player in leaderboard:
-            if player['matches'] > 0:
-                rank_icon = "🥇" if player['rank'] == 1 else "🥈" if player['rank'] == 2 else "🥉" if player['rank'] == 3 else f"{player['rank']}."
-                
-                text += f"{rank_icon} {player['name']}\n"
-                text += f"   امتیاز: {player['points']:+d} | "
-                text += f"بازی: {player['matches']} | "
-                text += f"برد: {player['wins']} | "
-                text += f"باخت: {player['losses']}\n"
-                text += f"   تفاضل گل: {player['goal_difference']:+d}\n\n"
+        # Calculate 20% threshold
+        participation_threshold = max_matches * 0.20
+        
+        # Get current user's telegram_id
+        current_user_id = update.effective_user.id
+        
+        # Filter players: show only those with 20%+ participation OR the current user
+        filtered_leaderboard = [
+            player for player in leaderboard 
+            if player['matches'] >= participation_threshold or player['telegram_id'] == current_user_id
+        ]
+        
+        # Re-rank after filtering
+        filtered_leaderboard.sort(key=lambda x: (x['points'], x['goal_difference']), reverse=True)
+        for idx, player in enumerate(filtered_leaderboard, 1):
+            player['rank'] = idx
+        
+        text = f"🏅 جدول لیگ {league.name}\n"
+        text += "━━━━━━━━━━━━━━━━━━━━━━\n"
+        text += f"📊 نمایش بازیکنان با حداقل {int(participation_threshold)} بازی ({int(participation_threshold/max_matches*100)}%)\n\n"
+        
+        for player in filtered_leaderboard:
+            rank_icon = "🥇" if player['rank'] == 1 else "🥈" if player['rank'] == 2 else "🥉" if player['rank'] == 3 else f"{player['rank']}."
+            
+            # Highlight current user
+            name_display = f"👤 {player['name']}" if player['telegram_id'] == current_user_id else player['name']
+            
+            text += f"{rank_icon} {name_display}\n"
+            text += f"   امتیاز: {player['points']:+d} | "
+            text += f"بازی: {player['matches']} | "
+            text += f"برد: {player['wins']} | "
+            text += f"باخت: {player['losses']}\n"
+            text += f"   تفاضل گل: {player['goal_difference']:+d}\n\n"
         
         await query.edit_message_text(
             text,
