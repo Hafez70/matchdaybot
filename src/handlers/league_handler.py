@@ -72,13 +72,15 @@ class LeagueHandler(BaseHandler):
         # Get bot username for invite link
         bot_username = (await context.bot.get_me()).username
         invite_link = self._get_invite_link(bot_username, league_code)
+        # Escape underscores for Markdown
+        invite_link_escaped = invite_link.replace('_', '\\_')
         
         text = f"""
 🏆 {league.name}
 
 🔑 کد لیگ: `{league.code}`
 🔗 لینک دعوت:
-{invite_link}
+{invite_link_escaped}
 
 👑 مالک: {owner_user.name if owner_user else 'نامشخص'}
 👥 اعضا: {member_count} نفر
@@ -129,6 +131,8 @@ class LeagueHandler(BaseHandler):
             # Get bot username for invite link
             bot_username = (await context.bot.get_me()).username
             invite_link = self._get_invite_link(bot_username, league.code)
+            # Escape underscores for Markdown
+            invite_link_escaped = invite_link.replace('_', '\\_')
             
             success_message = f"""
 ✅ لیگ با موفقیت ساخته شد!
@@ -137,7 +141,7 @@ class LeagueHandler(BaseHandler):
 🔑 کد دعوت: `{league.code}`
 
 🔗 لینک دعوت:
-{invite_link}
+{invite_link_escaped}
 
 این لینک یا کد رو با دوستات به اشتراک بذار تا به لیگ بپیوندن!
 """
