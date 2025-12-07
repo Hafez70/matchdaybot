@@ -10,6 +10,10 @@ class MatchHandler(BaseHandler):
     
     async def record_match_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Start match recording - select Team 1 players"""
+        # Check if user is registered
+        if not await self.ensure_user_registered(update, context):
+            return ConversationHandler.END
+        
         query = update.callback_query
         await query.answer()
         

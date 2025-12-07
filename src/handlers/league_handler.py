@@ -11,6 +11,10 @@ class LeagueHandler(BaseHandler):
     
     async def show_my_leagues(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Show user's leagues"""
+        # Check if user is registered
+        if not await self.ensure_user_registered(update, context):
+            return
+        
         query = update.callback_query
         await query.answer()
         
@@ -78,6 +82,10 @@ class LeagueHandler(BaseHandler):
     
     async def create_league_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Start league creation process"""
+        # Check if user is registered
+        if not await self.ensure_user_registered(update, context):
+            return ConversationHandler.END
+        
         query = update.callback_query
         await query.answer()
         
@@ -124,6 +132,10 @@ class LeagueHandler(BaseHandler):
     
     async def join_league_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Start league joining process"""
+        # Check if user is registered
+        if not await self.ensure_user_registered(update, context):
+            return ConversationHandler.END
+        
         query = update.callback_query
         await query.answer()
         
@@ -141,11 +153,11 @@ class LeagueHandler(BaseHandler):
         
         try:
             # Ensure user exists in database first
-            existing_user = self.user_service.get_user_by_id(telegram_id)
+            existing_user = self.user_service.get_user_by_telegram_id(telegram_id)
             if not existing_user:
                 # Create user if not exists
                 user_name = update.effective_user.first_name or update.effective_user.username or "User"
-                self.user_service.add_user(telegram_id, user_name)
+                self.user_service.register_user(telegram_id, user_name)
             
             # Join league
             league = self.league_service.join_league(league_code, telegram_id)
