@@ -9,6 +9,10 @@ from ..utils import to_persian_date
 class LeagueHandler(BaseHandler):
     """Handles league-related operations"""
     
+    def _get_invite_link(self, bot_username: str, league_code: str) -> str:
+        """Generate invite link for a league"""
+        return f"https://t.me/{bot_username}?start=join_{league_code}"
+    
     async def show_my_leagues(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Show user's leagues"""
         # Check if user is registered
@@ -65,10 +69,17 @@ class LeagueHandler(BaseHandler):
         owner_user = self.user_service.get_user_by_telegram_id(league.owner_telegram_id)
         is_owner = update.effective_user.id == league.owner_telegram_id
         
+        # Get bot username for invite link
+        bot_username = (await context.bot.get_me()).username
+        invite_link = self._get_invite_link(bot_username, league_code)
+        
         text = f"""
 🏆 {league.name}
 
 🔑 کد لیگ: `{league.code}`
+🔗 لینک دعوت:
+{invite_link}
+
 👑 مالک: {owner_user.name if owner_user else 'نامشخص'}
 👥 اعضا: {member_count} نفر
 📅 تاریخ ایجاد: {league.created_at.split('T')[0]}
@@ -115,8 +126,24 @@ class LeagueHandler(BaseHandler):
             # Add league to user
             self.user_service.add_league_to_user(telegram_id, league.code)
             
+            # Get bot username for invite link
+            bot_username = (await context.bot.get_me()).username
+            invite_link = self._get_invite_link(bot_username, league.code)
+            
+            success_message = f"""
+✅ لیگ با موفقیت ساخته شد!
+
+🏆 نام لیگ: {league.name}
+🔑 کد دعوت: `{league.code}`
+
+🔗 لینک دعوت:
+{invite_link}
+
+این لینک یا کد رو با دوستات به اشتراک بذار تا به لیگ بپیوندن!
+"""
+            
             await update.message.reply_text(
-                Messages.LEAGUE_CREATED.format(name=league.name, code=league.code),
+                success_message,
                 reply_markup=self.keyboard.build_back_button(),
                 parse_mode='Markdown'
             )

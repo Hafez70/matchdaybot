@@ -9,13 +9,23 @@ class RegistrationHandler(BaseHandler):
     """Handles user registration"""
     
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        """Handle /start command"""
+        """Handle /start command with deep link support"""
         user = update.effective_user
+        
+        # Check for deep link parameter (e.g., /start join_LEAGUECODE)
+        deep_link_param = None
+        if context.args and len(context.args) > 0:
+            deep_link_param = context.args[0]
         
         # Check if user is already registered
         existing_user = self.get_user_or_none(user.id)
         
         if existing_user:
+            # Handle deep link join if provided
+            if deep_link_param and deep_link_param.startswith('join_'):
+                league_code = deep_link_param[5:].upper()  # Remove 'join_' prefix
+                return await self._handle_deep_link_join(update, context, existing_user, league_code)
+            
             # User already registered, show main menu with points
             leagues = self.league_service.get_user_leagues(existing_user.telegram_id)
             
@@ -66,12 +76,56 @@ class RegistrationHandler(BaseHandler):
             )
             return ConversationHandler.END
         else:
+            # Save pending league join for after registration
+            if deep_link_param and deep_link_param.startswith('join_'):
+                context.user_data['pending_league_join'] = deep_link_param[5:].upper()
+            
             # New user, start registration
             await update.message.reply_text(
                 Messages.REGISTRATION_PROMPT,
                 reply_markup=self.keyboard.build_cancel_button()
             )
             return States.REGISTRATION_NAME
+    
+    async def _handle_deep_link_join(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
+                                      user, league_code: str) -> int:
+        """Handle joining a league via deep link"""
+        try:
+            league = self.league_service.get_league_by_code(league_code)
+            
+            if not league:
+                await update.message.reply_text(
+                    f"❌ لیگ با کد `{league_code}` پیدا نشد!",
+                    reply_markup=self.keyboard.build_main_menu(),
+                    parse_mode='Markdown'
+                )
+                return ConversationHandler.END
+            
+            # Check if already a member
+            if league.is_member(user.telegram_id):
+                await update.message.reply_text(
+                    f"ℹ️ شما قبلاً عضو لیگ '{league.name}' هستید!",
+                    reply_markup=self.keyboard.build_main_menu()
+                )
+                return ConversationHandler.END
+            
+            # Join the league
+            self.league_service.join_league(league_code, user.telegram_id)
+            
+            await update.message.reply_text(
+                f"✅ به لیگ '{league.name}' خوش اومدید!\n\n"
+                f"🏆 نام لیگ: {league.name}\n"
+                f"👥 اعضا: {len(league.members) + 1} نفر",
+                reply_markup=self.keyboard.build_main_menu()
+            )
+            return ConversationHandler.END
+            
+        except Exception as e:
+            await update.message.reply_text(
+                f"⚠️ خطا در پیوستن به لیگ: {str(e)}",
+                reply_markup=self.keyboard.build_main_menu()
+            )
+            return ConversationHandler.END
     
     async def registration_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Handle registration name input"""
@@ -88,6 +142,24 @@ class RegistrationHandler(BaseHandler):
         try:
             # Register user
             user = self.user_service.register_user(telegram_id, name)
+            
+            # Check for pending league join from deep link
+            pending_league = context.user_data.pop('pending_league_join', None)
+            
+            if pending_league:
+                # Try to join the pending league
+                try:
+                    league = self.league_service.get_league_by_code(pending_league)
+                    if league:
+                        self.league_service.join_league(pending_league, telegram_id)
+                        await update.message.reply_text(
+                            f"✅ ثبت نام با موفقیت انجام شد!\n\n"
+                            f"🎉 همچنین به لیگ '{league.name}' پیوستید!",
+                            reply_markup=self.keyboard.build_main_menu()
+                        )
+                        return ConversationHandler.END
+                except Exception:
+                    pass  # If join fails, just show normal success message
             
             await update.message.reply_text(
                 Messages.REGISTRATION_SUCCESS,
