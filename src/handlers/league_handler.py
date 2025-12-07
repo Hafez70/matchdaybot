@@ -140,6 +140,13 @@ class LeagueHandler(BaseHandler):
         telegram_id = update.effective_user.id
         
         try:
+            # Ensure user exists in database first
+            existing_user = self.user_service.get_user_by_id(telegram_id)
+            if not existing_user:
+                # Create user if not exists
+                user_name = update.effective_user.first_name or update.effective_user.username or "User"
+                self.user_service.add_user(telegram_id, user_name)
+            
             # Join league
             league = self.league_service.join_league(league_code, telegram_id)
             
