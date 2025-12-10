@@ -115,13 +115,19 @@ async def get_league_info(league_code: str):
         )
         member_count = cursor.fetchone()[0]
         
+        # Handle missing 'archived' column gracefully
+        try:
+            archived = bool(league['archived'])
+        except (KeyError, IndexError):
+            archived = False
+        
         return LeagueInfo(
             code=league['code'],
             name=league['name'],
             owner_telegram_id=league['owner_telegram_id'],
             owner_name=league['owner_name'] or 'Unknown',
             member_count=member_count,
-            archived=bool(league['archived']),
+            archived=archived,
             created_at=league['created_at']
         )
 
