@@ -188,45 +188,89 @@ class MatchHandler(BaseHandler):
             f"✅ تیم 1: {team1_str}\n"
             f"✅ تیم 2: {team2_str}"
             f"{results_text}\n\n"
-            f"⚽ نتیجه مسابقه رو وارد کن:\n"
-            f"فرمت: گل_تیم1-گل_تیم2\n"
-            f"مثال: 3-2",
+            f"⚽ نتایج مسابقات رو وارد کن:\n"
+            f"📝 فرمت: عدد فاصله عدد (هر خط یک نتیجه)\n\n"
+            f"مثال:\n"
+            f"3 2\n"
+            f"1 0\n"
+            f"2 2\n\n"
+            f"💡 می‌تونی چند نتیجه رو یکجا وارد کنی!",
             reply_markup=self.keyboard.build_cancel_button()
         )
         
         return States.MATCH_RESULT
     
     async def match_result(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        """Process match result"""
+        """Process match results (supports batch input)"""
         result_text = update.message.text.strip()
         
-        # Parse result
-        try:
-            parts = result_text.split('-')
-            if len(parts) != 2:
-                raise ValueError()
-            
-            team1_score = int(parts[0].strip())
-            team2_score = int(parts[1].strip())
-            
-            if team1_score < 0 or team2_score < 0:
-                raise ValueError()
+        # Parse results - supports multiple formats:
+        # "3 2" (space separated)
+        # "3-2" (dash separated)
+        # Multiple lines for batch input
         
-        except ValueError:
+        new_results = []
+        lines = result_text.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            try:
+                # Try space-separated format first (new format)
+                if ' ' in line:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        team1_score = int(parts[0].strip())
+                        team2_score = int(parts[1].strip())
+                    else:
+                        raise ValueError()
+                # Fall back to dash-separated format (old format)
+                elif '-' in line:
+                    parts = line.split('-')
+                    if len(parts) == 2:
+                        team1_score = int(parts[0].strip())
+                        team2_score = int(parts[1].strip())
+                    else:
+                        raise ValueError()
+                else:
+                    raise ValueError()
+                
+                if team1_score < 0 or team2_score < 0:
+                    raise ValueError()
+                
+                new_results.append({
+                    'team1_score': team1_score,
+                    'team2_score': team2_score
+                })
+                
+            except ValueError:
+                await update.message.reply_text(
+                    f"❌ فرمت نتیجه '{line}' اشتباه است!\n\n"
+                    "📝 فرمت صحیح: عدد فاصله عدد\n"
+                    "مثال:\n"
+                    "3 2\n"
+                    "1 0\n"
+                    "2 2",
+                    reply_markup=self.keyboard.build_cancel_button()
+                )
+                return States.MATCH_RESULT
+        
+        if not new_results:
             await update.message.reply_text(
-                "❌ فرمت نتیجه اشتباه است!\n"
-                "لطفاً به فرمت 'عدد-عدد' وارد کنید\n"
-                "مثال: 3-2",
+                "❌ هیچ نتیجه‌ای وارد نشده!\n\n"
+                "📝 فرمت صحیح: عدد فاصله عدد\n"
+                "مثال:\n"
+                "3 2\n"
+                "1 0",
                 reply_markup=self.keyboard.build_cancel_button()
             )
             return States.MATCH_RESULT
         
-        # Save result to context
+        # Save results to context
         results = context.user_data.get('match_results', [])
-        results.append({
-            'team1_score': team1_score,
-            'team2_score': team2_score
-        })
+        results.extend(new_results)
         context.user_data['match_results'] = results
         
         # Build teams info
@@ -237,8 +281,6 @@ class MatchHandler(BaseHandler):
         team1_str = ' و '.join(team1_names)
         team2_str = ' و '.join(team2_names)
         
-        winner_emoji = "🏆" if team1_score > team2_score else "❌" if team1_score < team2_score else "🤝"
-        
         # Show result and ask for more
         results_text = "\n📊 نتایج ثبت شده:\n"
         for i, r in enumerate(results, 1):
@@ -246,18 +288,20 @@ class MatchHandler(BaseHandler):
             results_text += f"{i}. {emoji} {r['team1_score']}-{r['team2_score']}\n"
         
         keyboard = [
-            [InlineKeyboardButton("➕ ثبت نتیجه بعدی", callback_data='add_another_result')],
+            [InlineKeyboardButton("➕ ثبت نتایج بیشتر", callback_data='add_another_result')],
             [InlineKeyboardButton("✅ پایان و ذخیره مسابقات", callback_data='finish_competition')],
             [InlineKeyboardButton("❌ لغو", callback_data='cancel_operation')]
         ]
         
+        added_count = len(new_results)
         text = f"""
-✅ نتیجه ثبت شد!
+✅ {added_count} نتیجه اضافه شد!
 
-{winner_emoji} {team1_str} {team1_score}-{team2_score} {team2_str}
+👥 تیم ۱: {team1_str}
+👥 تیم ۲: {team2_str}
 
 {results_text}
-می‌خوای نتیجه بعدی رو ثبت کنی یا تمام مسابقات رو ذخیره کنی؟
+می‌خوای نتایج بیشتری ثبت کنی یا ذخیره کنی؟
 """
         
         await update.message.reply_text(
@@ -268,7 +312,7 @@ class MatchHandler(BaseHandler):
         return States.MATCH_CONTINUE
     
     async def add_another_result(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        """Add another result"""
+        """Add more results"""
         query = update.callback_query
         await query.answer()
         
@@ -289,9 +333,12 @@ class MatchHandler(BaseHandler):
             f"✅ تیم 1: {team1_str}\n"
             f"✅ تیم 2: {team2_str}"
             f"{results_text}\n\n"
-            f"⚽ نتیجه مسابقه بعدی رو وارد کن:\n"
-            f"فرمت: گل_تیم1-گل_تیم2\n"
-            f"مثال: 3-2",
+            f"⚽ نتایج مسابقات بیشتر رو وارد کن:\n"
+            f"📝 فرمت: عدد فاصله عدد (هر خط یک نتیجه)\n\n"
+            f"مثال:\n"
+            f"3 2\n"
+            f"1 0\n"
+            f"2 2",
             reply_markup=self.keyboard.build_cancel_button()
         )
         

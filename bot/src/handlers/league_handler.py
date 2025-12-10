@@ -351,14 +351,17 @@ class LeagueHandler(BaseHandler):
             team2_names = [self.user_service.get_user_by_telegram_id(tid).name 
                           for tid in match.team2]
             
-            team1_str = ' و '.join(team1_names)
-            team2_str = ' و '.join(team2_names)
+            team1_str = ' - '.join(team1_names)
+            team2_str = ' - '.join(team2_names)
             
             winner = match.get_winner()
             winner_emoji = "🏆" if winner == 'team1' else "❌" if winner == 'team2' else "🤝"
             
-            text += f"{i}. {team1_str} {match.result['team1']}-{match.result['team2']} {team2_str} {winner_emoji}\n"
-            text += f"   📅 {to_persian_date(match.datetime)} | {match.match_type}\n\n"
+            # New format: more readable
+            text += f"━━━ مسابقه {i} ━━━\n"
+            text += f"تیم ۱ - {team1_str} : {match.result['team1']}\n"
+            text += f"تیم ۲ - {team2_str} : {match.result['team2']}\n"
+            text += f"{winner_emoji} 📅 {to_persian_date(match.datetime)}\n\n"
         
         # If owner, show match management buttons
         if is_owner:
