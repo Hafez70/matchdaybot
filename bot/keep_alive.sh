@@ -1,9 +1,11 @@
 #!/bin/bash
 # FIFA Bot - Keep Alive Script (cPanel Optimized)
 # This script monitors and restarts the bot if it crashes
-# Add to cPanel Cron Jobs: */5 * * * * ~/fifa-bot/keep_alive.sh
+# Add to cPanel Cron Jobs: */5 * * * * ~/fifa-bot/bot/keep_alive.sh
 
 cd "$(dirname "$0")"
+BOT_DIR="$(pwd)"
+PROJECT_DIR="$(dirname "$BOT_DIR")"
 
 LOG_FILE="keep_alive.log"
 MAX_LOG_SIZE=1048576  # 1MB
@@ -49,12 +51,14 @@ else
     log_message "✗ Bot not running, starting..."
 fi
 
-# Start the bot
-if [ -d "venv" ]; then
+# Activate virtual environment (parent directory)
+if [ -d "$PROJECT_DIR/venv" ]; then
+    source "$PROJECT_DIR/venv/bin/activate"
+elif [ -d "venv" ]; then
     source venv/bin/activate
 fi
 
-nohup python3 main.py > bot.log 2>&1 &
+nohup python main.py > bot.log 2>&1 &
 BOT_PID=$!
 echo $BOT_PID > bot.pid
 

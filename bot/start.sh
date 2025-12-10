@@ -1,9 +1,14 @@
 #!/bin/bash
 # FIFA Bot - Start Script (cPanel Optimized)
 
+# Go to bot directory
 cd "$(dirname "$0")"
+BOT_DIR="$(pwd)"
+PROJECT_DIR="$(dirname "$BOT_DIR")"
 
 echo "🚀 Starting FIFA Match Tracker Bot..."
+echo "   Bot directory: $BOT_DIR"
+echo "   Project directory: $PROJECT_DIR"
 
 # Check if bot is already running
 if [ -f bot.pid ]; then
@@ -17,18 +22,25 @@ if [ -f bot.pid ]; then
     fi
 fi
 
-# Activate virtual environment if it exists
-if [ -d "venv" ]; then
+# Activate virtual environment (in parent directory)
+if [ -d "$PROJECT_DIR/venv" ]; then
     echo "Activating virtual environment..."
+    source "$PROJECT_DIR/venv/bin/activate"
+elif [ -d "venv" ]; then
+    echo "Activating local virtual environment..."
     source venv/bin/activate
 else
     echo "⚠️  No virtual environment found, using system Python"
 fi
 
-# Check if config.env exists
-if [ ! -f "config.env" ]; then
+# Check if config.env exists (in parent directory)
+if [ -f "$PROJECT_DIR/config.env" ]; then
+    echo "✅ Config found: $PROJECT_DIR/config.env"
+elif [ -f "config.env" ]; then
+    echo "✅ Config found: config.env"
+else
     echo "❌ Error: config.env not found!"
-    echo "Create it from env_example.txt and add your bot token"
+    echo "Create it in $PROJECT_DIR and add your bot token"
     exit 1
 fi
 
@@ -40,14 +52,14 @@ fi
 
 # Start the bot in background
 echo "Starting bot in background..."
-nohup python3 main.py > bot.log 2>&1 &
+nohup python main.py > bot.log 2>&1 &
 BOT_PID=$!
 
 # Save PID
 echo $BOT_PID > bot.pid
 
 # Wait a moment and check if it started successfully
-sleep 2
+sleep 3
 
 if ps -p $BOT_PID > /dev/null 2>&1; then
     echo "✅ Bot started successfully!"
