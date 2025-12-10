@@ -39,6 +39,14 @@ apiClient.interceptors.response.use(
 
 export const api = {
   /**
+   * Get user's leagues
+   */
+  async getUserLeagues(telegramId) {
+    const response = await apiClient.get(`/api/user/${telegramId}/leagues`)
+    return response.data
+  },
+
+  /**
    * Get league information
    */
   async getLeagueInfo(leagueCode) {

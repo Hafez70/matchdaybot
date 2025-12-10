@@ -82,12 +82,97 @@ class UserInfo(BaseModel):
     created_at: str
 
 
+class UserLeague(BaseModel):
+    code: str
+    name: str
+    member_count: int
+    is_owner: bool
+    my_points: int
+    my_rank: int
+
+
 # ============ API Routes ============
 
 @app.get("/")
 async def root():
     """Health check"""
     return {"status": "ok", "message": "MatchDay API is running 🎮⚽"}
+
+
+@app.get("/api/user/{telegram_id}/leagues", response_model=list[UserLeague])
+async def get_user_leagues(telegram_id: int):
+    """Get all leagues for a user"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        # Check user exists
+        cursor.execute("SELECT name FROM users WHERE telegram_id = ?", (telegram_id,))
+        user = cursor.fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Get user's leagues
+        cursor.execute("""
+            SELECT l.code, l.name, l.owner_telegram_id,
+                   (SELECT COUNT(*) FROM league_members WHERE league_code = l.code) as member_count
+            FROM leagues l
+            JOIN league_members lm ON l.code = lm.league_code
+            WHERE lm.telegram_id = ? AND (l.archived = 0 OR l.archived IS NULL)
+            ORDER BY l.name
+        """, (telegram_id,))
+        
+        leagues = []
+        for row in cursor.fetchall():
+            # Calculate user's points and rank in this league
+            cursor.execute("""
+                SELECT 
+                    COALESCE(SUM(CASE 
+                        WHEN (mp.team_number = 1 AND m.team1_score > m.team2_score) OR
+                             (mp.team_number = 2 AND m.team2_score > m.team1_score)
+                        THEN 1 ELSE 0 END), 0) as wins,
+                    COALESCE(SUM(CASE 
+                        WHEN (mp.team_number = 1 AND m.team1_score < m.team2_score) OR
+                             (mp.team_number = 2 AND m.team2_score < m.team1_score)
+                        THEN 1 ELSE 0 END), 0) as losses
+                FROM match_players mp
+                JOIN matches m ON mp.match_id = m.id AND m.league_code = ?
+                WHERE mp.telegram_id = ?
+            """, (row['code'], telegram_id))
+            stats = cursor.fetchone()
+            my_points = (stats['wins'] or 0) - (stats['losses'] or 0)
+            
+            # Get rank (simplified - just count players with more points)
+            cursor.execute("""
+                SELECT COUNT(*) + 1 as rank
+                FROM (
+                    SELECT mp.telegram_id,
+                        SUM(CASE 
+                            WHEN (mp.team_number = 1 AND m.team1_score > m.team2_score) OR
+                                 (mp.team_number = 2 AND m.team2_score > m.team1_score)
+                            THEN 1 ELSE 0 END) -
+                        SUM(CASE 
+                            WHEN (mp.team_number = 1 AND m.team1_score < m.team2_score) OR
+                                 (mp.team_number = 2 AND m.team2_score < m.team1_score)
+                            THEN 1 ELSE 0 END) as points
+                    FROM match_players mp
+                    JOIN matches m ON mp.match_id = m.id AND m.league_code = ?
+                    GROUP BY mp.telegram_id
+                    HAVING points > ?
+                )
+            """, (row['code'], my_points))
+            rank_result = cursor.fetchone()
+            my_rank = rank_result['rank'] if rank_result else 1
+            
+            leagues.append(UserLeague(
+                code=row['code'],
+                name=row['name'],
+                member_count=row['member_count'],
+                is_owner=row['owner_telegram_id'] == telegram_id,
+                my_points=my_points,
+                my_rank=my_rank
+            ))
+        
+        return leagues
 
 
 @app.get("/api/league/{league_code}", response_model=LeagueInfo)

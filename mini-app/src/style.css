@@ -37,6 +37,12 @@
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
   --shadow-glow: 0 0 20px var(--primary-glow);
   
+  /* Component Variables (aliases) */
+  --card-bg: var(--bg-card);
+  --border: rgba(139, 92, 246, 0.2);
+  --secondary: #6366f1;
+  --error: var(--danger);
+  
   /* Border Radius */
   --radius-sm: 8px;
   --radius-md: 12px;

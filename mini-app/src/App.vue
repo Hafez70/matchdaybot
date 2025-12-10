@@ -2,16 +2,20 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import api from './services/api'
 import { useTelegram } from './composables/useTelegram'
+import LeagueSelector from './components/LeagueSelector.vue'
 import LeaderboardView from './components/LeaderboardView.vue'
 import MatchesView from './components/MatchesView.vue'
 import MembersView from './components/MembersView.vue'
 import PlayerStatsView from './components/PlayerStatsView.vue'
 
-const { leagueCode, isReady, userName, hapticFeedback } = useTelegram()
+const { leagueCode: initialLeagueCode, isReady, userName, userId, hapticFeedback, showBackButton, hideBackButton } = useTelegram()
 
+// App state
+const currentView = ref('selector') // 'selector' | 'league'
+const selectedLeague = ref(null)
 const activeTab = ref('leaderboard')
 const league = ref(null)
-const loading = ref(true)
+const loading = ref(false)
 const error = ref(null)
 
 const tabs = [
@@ -21,10 +25,12 @@ const tabs = [
   { id: 'stats', label: '📊 آمار من', icon: '📊' }
 ]
 
+const currentLeagueCode = computed(() => {
+  return selectedLeague.value?.code || initialLeagueCode.value
+})
+
 const fetchLeagueInfo = async () => {
-  if (!leagueCode.value) {
-    error.value = 'کد لیگ مشخص نشده'
-    loading.value = false
+  if (!currentLeagueCode.value) {
     return
   }
   
@@ -32,7 +38,8 @@ const fetchLeagueInfo = async () => {
   error.value = null
   
   try {
-    league.value = await api.getLeagueInfo(leagueCode.value)
+    league.value = await api.getLeagueInfo(currentLeagueCode.value)
+    currentView.value = 'league'
   } catch (err) {
     if (err.response?.status === 404) {
       error.value = 'لیگ پیدا نشد'
@@ -45,19 +52,42 @@ const fetchLeagueInfo = async () => {
   }
 }
 
+const onSelectLeague = (leagueData) => {
+  selectedLeague.value = leagueData
+  fetchLeagueInfo()
+}
+
+const goBack = () => {
+  hapticFeedback('light')
+  currentView.value = 'selector'
+  selectedLeague.value = null
+  league.value = null
+  hideBackButton()
+}
+
 const switchTab = (tabId) => {
   activeTab.value = tabId
   hapticFeedback('light')
 }
 
+// Watch for view changes to show/hide back button
+watch(currentView, (newView) => {
+  if (newView === 'league') {
+    showBackButton(goBack)
+  } else {
+    hideBackButton()
+  }
+})
+
 onMounted(() => {
-  if (isReady.value && leagueCode.value) {
+  // If league code is provided (from bot deep link), go directly to league view
+  if (isReady.value && initialLeagueCode.value) {
     fetchLeagueInfo()
   }
 })
 
-watch([isReady, leagueCode], ([ready, code]) => {
-  if (ready && code) {
+watch([isReady, initialLeagueCode], ([ready, code]) => {
+  if (ready && code && !selectedLeague.value) {
     fetchLeagueInfo()
   }
 })
@@ -65,8 +95,14 @@ watch([isReady, leagueCode], ([ready, code]) => {
 
 <template>
   <div class="app">
+    <!-- League Selector View -->
+    <LeagueSelector 
+      v-if="currentView === 'selector' && !loading"
+      @select-league="onSelectLeague"
+    />
+
     <!-- Loading State -->
-    <div v-if="loading" class="loading full-screen">
+    <div v-else-if="loading" class="loading full-screen">
       <div class="spinner"></div>
       <span>در حال بارگذاری...</span>
     </div>
@@ -78,21 +114,27 @@ watch([isReady, leagueCode], ([ready, code]) => {
       <button class="retry-btn" @click="fetchLeagueInfo">
         تلاش مجدد
       </button>
+      <button class="back-btn" @click="goBack">
+        بازگشت
+      </button>
     </div>
 
-    <!-- Main Content -->
-    <div v-else-if="league" class="main-content">
+    <!-- League Detail View -->
+    <div v-else-if="currentView === 'league' && league" class="main-content">
       <!-- League Header -->
       <div class="league-header">
-        <div class="league-icon">🏆</div>
-        <h1 class="league-name">{{ league.name }}</h1>
-        <div class="league-meta">
-          <span class="league-meta-item">
-            👥 {{ league.member_count }} عضو
-          </span>
-          <span class="league-meta-item">
-            👑 {{ league.owner_name }}
-          </span>
+        <button class="back-arrow" @click="goBack">←</button>
+        <div class="header-content">
+          <div class="league-icon">🏆</div>
+          <h1 class="league-name">{{ league.name }}</h1>
+          <div class="league-meta">
+            <span class="league-meta-item">
+              👥 {{ league.member_count }} عضو
+            </span>
+            <span class="league-meta-item">
+              👑 {{ league.owner_name }}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -114,18 +156,9 @@ watch([isReady, leagueCode], ([ready, code]) => {
         <component
           :is="activeComponent"
           :key="activeTab"
-          :league-code="leagueCode"
+          :league-code="currentLeagueCode"
         />
       </Transition>
-    </div>
-
-    <!-- No League Selected -->
-    <div v-else class="empty-state full-screen">
-      <div class="empty-icon">🎮</div>
-      <h2>MatchDay</h2>
-      <p class="empty-text">
-        لطفاً از طریق ربات تلگرام وارد شوید
-      </p>
     </div>
   </div>
 </template>
@@ -144,6 +177,7 @@ export default {
     }
   },
   components: {
+    LeagueSelector,
     LeaderboardView,
     MatchesView,
     MembersView,
@@ -163,12 +197,80 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 16px;
 }
 
 .main-content {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.league-header {
+  position: relative;
+  padding: 20px;
+  padding-top: 10px;
+}
+
+.back-arrow {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  background: var(--card-bg);
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  color: var(--text-primary);
+}
+
+.back-arrow:hover {
+  background: var(--primary);
+  color: white;
+}
+
+.header-content {
+  text-align: center;
+}
+
+.back-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 10px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.back-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.retry-btn {
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.error-icon {
+  font-size: 64px;
+}
+
+.error-message {
+  color: var(--text-secondary);
 }
 
 .fade-enter-active,

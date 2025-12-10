@@ -59,7 +59,11 @@ export function useTelegram() {
       
       // Check URL for league param
       const urlParams = new URLSearchParams(window.location.search)
-      leagueCode.value = urlParams.get('league') || 'S8IR6D' // Default for testing
+      const urlLeague = urlParams.get('league')
+      if (urlLeague) {
+        leagueCode.value = urlLeague
+      }
+      // Don't set default league - let user select from list
       
       // Mock user for testing
       user.value = {
