@@ -66,6 +66,13 @@ nohup.out
 Thumbs.db
 .DS_Store
 
+# Node.js (mini-app)
+node_modules/
+dist/
+.env.local
+.env.*.local
+*.local
+
 # Project specific
 matchdaybot.zip
 test-analyzer.rar

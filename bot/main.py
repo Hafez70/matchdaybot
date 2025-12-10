@@ -23,7 +23,7 @@ from src.handlers import (
 from src.config import States
 
 # Load environment variables
-load_dotenv('config.env')
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', 'config.env'))
 
 # Logging setup
 logging.basicConfig(
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 # Get settings
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-DB_FILE = 'fifa_bot.db'
+DB_FILE = os.path.join(os.path.dirname(__file__), '..', 'database', 'fifa_bot.db')
 
 
 class FifaBot:
