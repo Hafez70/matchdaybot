@@ -4,6 +4,12 @@ Passenger WSGI wrapper for FastAPI on cPanel
 import os
 import sys
 
+# Activate virtual environment
+VENV_PATH = '/home/fcfun/fifa-bot/venv'
+python_path = os.path.join(VENV_PATH, 'lib', 'python3.11', 'site-packages')
+if os.path.exists(python_path) and python_path not in sys.path:
+    sys.path.insert(0, python_path)
+
 # Prevent recursion - only run once
 if 'main' not in sys.modules:
     # Setup paths
