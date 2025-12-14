@@ -481,11 +481,11 @@ class MatchHandler(BaseHandler):
                 # Check if this user participated in the match
                 is_participant = telegram_id in team1_ids or telegram_id in team2_ids
                 
-                # Build results text based on player's perspective
-                results_text = "📊 نتایج:\n"
+                # Build results text with clear team names and scores
+                results_text = ""
                 for i, r in enumerate(results, 1):
+                    # Determine emoji based on player's perspective
                     if is_participant:
-                        # Show emoji from player's perspective
                         if telegram_id in team1_ids:
                             emoji = "🏆" if r['team1_score'] > r['team2_score'] else "❌" if r['team1_score'] < r['team2_score'] else "🤝"
                         else:  # team2
@@ -493,7 +493,14 @@ class MatchHandler(BaseHandler):
                     else:
                         # Non-participant: show from team1 perspective (neutral)
                         emoji = "🏆" if r['team1_score'] > r['team2_score'] else "❌" if r['team1_score'] < r['team2_score'] else "🤝"
-                    results_text += f"{i}. {emoji} {r['team1_score']}-{r['team2_score']}\n"
+                    
+                    # Format like: نتیجه 1: 🏆
+                    # team1 names : score
+                    # team2 names : score
+                    results_text += f"نتیجه {i}: {emoji}\n"
+                    results_text += f"{team1_str}  :  {r['team1_score']}\n"
+                    results_text += f"{team2_str}  :  {r['team2_score']}\n"
+                    results_text += "─" * 20 + "\n"
                 
                 if is_participant:
                     # Send detailed message with personal stats and GIF

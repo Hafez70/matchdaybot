@@ -1,22 +1,66 @@
 """FastAPI Backend for FIFA Bot Mini App"""
 import os
+import sys
 import sqlite3
+import logging
+import traceback
 from datetime import datetime
 from contextlib import contextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Query, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+from telegram_auth import TelegramUser, get_current_user, get_optional_user
+
+# ============ Logging Setup ============
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Load environment variables
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', 'config.env'))
 
 # Database path
 DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'database', 'fifa_bot.db')
+logger.info(f"Database path: {DB_PATH}")
+logger.info(f"Database exists: {os.path.exists(DB_PATH)}")
 
 app = FastAPI(
     title="MatchDay API",
     description="API for FIFA Bot Mini App",
     version="1.0.0"
 )
+
+
+# ============ Exception Handler ============
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch all exceptions and log them with full traceback"""
+    error_msg = f"Internal Server Error: {str(exc)}"
+    tb = traceback.format_exc()
+    
+    logger.error(f"🔴 Error on {request.method} {request.url}")
+    logger.error(f"🔴 Exception: {type(exc).__name__}: {exc}")
+    logger.error(f"🔴 Traceback:\n{tb}")
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": str(exc),
+            "type": type(exc).__name__,
+            "path": str(request.url.path)
+        }
+    )
+
 
 # CORS middleware for Mini App
 app.add_middleware(
@@ -99,17 +143,29 @@ async def root():
     return {"status": "ok", "message": "MatchDay API is running 🎮⚽"}
 
 
-@app.get("/api/user/{telegram_id}/leagues", response_model=list[UserLeague])
-async def get_user_leagues(telegram_id: int):
-    """Get all leagues for a user"""
+@app.get("/api/me")
+async def get_me(user: TelegramUser = Depends(get_current_user)):
+    """Get current authenticated user info"""
+    return {
+        "telegram_id": user.id,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "username": user.username,
+        "is_premium": user.is_premium
+    }
+
+
+@app.get("/api/me/leagues", response_model=list)
+async def get_my_leagues(user: TelegramUser = Depends(get_current_user)):
+    """Get leagues for authenticated user - secure version"""
     with get_db() as conn:
         cursor = conn.cursor()
         
         # Check user exists
-        cursor.execute("SELECT name FROM users WHERE telegram_id = ?", (telegram_id,))
-        user = cursor.fetchone()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        cursor.execute("SELECT name FROM users WHERE telegram_id = ?", (user.id,))
+        db_user = cursor.fetchone()
+        if not db_user:
+            return []
         
         # Get user's leagues
         cursor.execute("""
@@ -117,13 +173,13 @@ async def get_user_leagues(telegram_id: int):
                    (SELECT COUNT(*) FROM league_members WHERE league_code = l.code) as member_count
             FROM leagues l
             JOIN league_members lm ON l.code = lm.league_code
-            WHERE lm.telegram_id = ? AND (l.archived = 0 OR l.archived IS NULL)
+            WHERE lm.telegram_id = ?
             ORDER BY l.name
-        """, (telegram_id,))
+        """, (user.id,))
         
         leagues = []
         for row in cursor.fetchall():
-            # Calculate user's points and rank in this league
+            # Calculate user's points
             cursor.execute("""
                 SELECT 
                     COALESCE(SUM(CASE 
@@ -137,42 +193,120 @@ async def get_user_leagues(telegram_id: int):
                 FROM match_players mp
                 JOIN matches m ON mp.match_id = m.id AND m.league_code = ?
                 WHERE mp.telegram_id = ?
-            """, (row['code'], telegram_id))
+            """, (row['code'], user.id))
             stats = cursor.fetchone()
             my_points = (stats['wins'] or 0) - (stats['losses'] or 0)
             
-            # Get rank (simplified - just count players with more points)
-            cursor.execute("""
-                SELECT COUNT(*) + 1 as rank
-                FROM (
-                    SELECT mp.telegram_id,
-                        SUM(CASE 
-                            WHEN (mp.team_number = 1 AND m.team1_score > m.team2_score) OR
-                                 (mp.team_number = 2 AND m.team2_score > m.team1_score)
-                            THEN 1 ELSE 0 END) -
-                        SUM(CASE 
-                            WHEN (mp.team_number = 1 AND m.team1_score < m.team2_score) OR
-                                 (mp.team_number = 2 AND m.team2_score < m.team1_score)
-                            THEN 1 ELSE 0 END) as points
-                    FROM match_players mp
-                    JOIN matches m ON mp.match_id = m.id AND m.league_code = ?
-                    GROUP BY mp.telegram_id
-                    HAVING points > ?
-                )
-            """, (row['code'], my_points))
-            rank_result = cursor.fetchone()
-            my_rank = rank_result['rank'] if rank_result else 1
-            
-            leagues.append(UserLeague(
-                code=row['code'],
-                name=row['name'],
-                member_count=row['member_count'],
-                is_owner=row['owner_telegram_id'] == telegram_id,
-                my_points=my_points,
-                my_rank=my_rank
-            ))
+            leagues.append({
+                "code": row['code'],
+                "name": row['name'],
+                "member_count": row['member_count'],
+                "is_owner": row['owner_telegram_id'] == user.id,
+                "my_points": my_points
+            })
         
         return leagues
+
+
+@app.get("/api/user/{telegram_id}")
+async def get_user_info(telegram_id: int):
+    """Get user information"""
+    logger.info(f"📥 get_user_info called with telegram_id={telegram_id}")
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT telegram_id, name, created_at FROM users WHERE telegram_id = ?", (telegram_id,))
+        user = cursor.fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return {
+            "telegram_id": user['telegram_id'],
+            "name": user['name'],
+            "created_at": user['created_at']
+        }
+
+
+@app.get("/api/user/{telegram_id}/leagues", response_model=list[UserLeague])
+async def get_user_leagues(telegram_id: int):
+    """Get all leagues for a user"""
+    logger.info(f"📥 get_user_leagues called with telegram_id={telegram_id}")
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Check user exists
+            cursor.execute("SELECT name FROM users WHERE telegram_id = ?", (telegram_id,))
+            user = cursor.fetchone()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            # Get user's leagues
+            cursor.execute("""
+                SELECT l.code, l.name, l.owner_telegram_id,
+                       (SELECT COUNT(*) FROM league_members WHERE league_code = l.code) as member_count
+                FROM leagues l
+                JOIN league_members lm ON l.code = lm.league_code
+                WHERE lm.telegram_id = ?
+                ORDER BY l.name
+            """, (telegram_id,))
+            
+            leagues = []
+            for row in cursor.fetchall():
+                # Calculate user's points and rank in this league
+                cursor.execute("""
+                    SELECT 
+                        COALESCE(SUM(CASE 
+                            WHEN (mp.team_number = 1 AND m.team1_score > m.team2_score) OR
+                                 (mp.team_number = 2 AND m.team2_score > m.team1_score)
+                            THEN 1 ELSE 0 END), 0) as wins,
+                        COALESCE(SUM(CASE 
+                            WHEN (mp.team_number = 1 AND m.team1_score < m.team2_score) OR
+                                 (mp.team_number = 2 AND m.team2_score < m.team1_score)
+                            THEN 1 ELSE 0 END), 0) as losses
+                    FROM match_players mp
+                    JOIN matches m ON mp.match_id = m.id AND m.league_code = ?
+                    WHERE mp.telegram_id = ?
+                """, (row['code'], telegram_id))
+                stats = cursor.fetchone()
+                my_points = (stats['wins'] or 0) - (stats['losses'] or 0)
+                
+                # Get rank (simplified - just count players with more points)
+                cursor.execute("""
+                    SELECT COUNT(*) + 1 as rank
+                    FROM (
+                        SELECT mp.telegram_id,
+                            SUM(CASE 
+                                WHEN (mp.team_number = 1 AND m.team1_score > m.team2_score) OR
+                                     (mp.team_number = 2 AND m.team2_score > m.team1_score)
+                                THEN 1 ELSE 0 END) -
+                            SUM(CASE 
+                                WHEN (mp.team_number = 1 AND m.team1_score < m.team2_score) OR
+                                     (mp.team_number = 2 AND m.team2_score < m.team1_score)
+                                THEN 1 ELSE 0 END) as points
+                        FROM match_players mp
+                        JOIN matches m ON mp.match_id = m.id AND m.league_code = ?
+                        GROUP BY mp.telegram_id
+                        HAVING points > ?
+                    )
+                """, (row['code'], my_points))
+                rank_result = cursor.fetchone()
+                my_rank = rank_result['rank'] if rank_result else 1
+                
+                leagues.append(UserLeague(
+                    code=row['code'],
+                    name=row['name'],
+                    member_count=row['member_count'],
+                    is_owner=row['owner_telegram_id'] == telegram_id,
+                    my_points=my_points,
+                    my_rank=my_rank
+                ))
+            
+            return leagues
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"🔴 Error in get_user_leagues: {type(e).__name__}: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/league/{league_code}", response_model=LeagueInfo)

@@ -1,10 +1,30 @@
 /**
  * API Service for MatchDay Mini App
+ * With Telegram Auth support
  */
 import axios from 'axios'
 
 // API Base URL - In production, this should be your deployed API URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+
+// Store initData for auth
+let telegramInitData = null
+
+/**
+ * Set Telegram init data for authentication
+ * @param {string} initData - Raw init data from Telegram WebApp
+ */
+export function setTelegramInitData(initData) {
+  telegramInitData = initData
+  console.log('🔐 Auth: Telegram init data set')
+}
+
+/**
+ * Get stored init data
+ */
+export function getTelegramInitData() {
+  return telegramInitData
+}
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -14,10 +34,16 @@ const apiClient = axios.create({
   }
 })
 
-// Request interceptor for logging
+// Request interceptor - add Authorization header
 apiClient.interceptors.request.use(
   (config) => {
     console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`)
+    
+    // Add Telegram auth header if available
+    if (telegramInitData) {
+      config.headers.Authorization = `tma ${telegramInitData}`
+    }
+    
     return config
   },
   (error) => {
@@ -33,13 +59,43 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     console.error(`❌ API Error: ${error.config?.url}`, error.message)
+    
+    // Handle auth errors
+    if (error.response?.status === 401) {
+      console.error('🔒 Authentication failed:', error.response.data?.detail)
+    }
+    
     return Promise.reject(error)
   }
 )
 
 export const api = {
   /**
-   * Get user's leagues
+   * Get current authenticated user
+   */
+  async getMe() {
+    const response = await apiClient.get('/api/me')
+    return response.data
+  },
+
+  /**
+   * Get user info by telegram ID
+   */
+  async getUserInfo(telegramId) {
+    const response = await apiClient.get(`/api/user/${telegramId}`)
+    return response.data
+  },
+
+  /**
+   * Get authenticated user's leagues (secure)
+   */
+  async getMyLeagues() {
+    const response = await apiClient.get('/api/me/leagues')
+    return response.data
+  },
+
+  /**
+   * Get user's leagues (legacy - by telegram id)
    */
   async getUserLeagues(telegramId) {
     const response = await apiClient.get(`/api/user/${telegramId}/leagues`)
@@ -91,4 +147,3 @@ export const api = {
 }
 
 export default api
-

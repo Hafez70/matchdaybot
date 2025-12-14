@@ -1,23 +1,42 @@
 <script setup>
-import { ref, onMounted, defineEmits } from 'vue'
+import { ref, onMounted } from 'vue'
 import api from '../services/api'
 import { useTelegram } from '../composables/useTelegram'
 
 const emit = defineEmits(['select-league'])
 
-const { userId, userName, hapticFeedback, webApp } = useTelegram()
+const { userId, userName, hapticFeedback, isTelegram, initDataRaw, openTelegramBot } = useTelegram()
 
 const leagues = ref([])
 const loading = ref(true)
 const error = ref(null)
 const notInTelegram = ref(false)
+const realUserName = ref(null) // Real user name from database
 
 // Bot username for redirect link
-const BOT_USERNAME = 'frontAssistantbot'
+const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME || 'frontAssistantbot'
+
+// Display name: use real name from DB if available, otherwise use Telegram name
+const displayName = () => realUserName.value || userName.value
+
+const fetchUserInfo = async () => {
+  if (!userId.value) return
+  try {
+    const userInfo = await api.getUserInfo(userId.value)
+    realUserName.value = userInfo.name
+    console.log('✅ Real user name:', realUserName.value)
+  } catch (err) {
+    console.error('Failed to fetch user info:', err)
+    // Fall back to Telegram name
+  }
+}
 
 const fetchLeagues = async () => {
-  // Check if opened from Telegram
-  if (!window.Telegram?.WebApp && !userId.value) {
+  // Check if opened from Telegram (in production)
+  // In dev mode, we allow mock user
+  const isDevMode = import.meta.env.DEV
+  
+  if (!isTelegram.value && !isDevMode) {
     notInTelegram.value = true
     loading.value = false
     return
@@ -33,9 +52,22 @@ const fetchLeagues = async () => {
   error.value = null
   
   try {
-    leagues.value = await api.getUserLeagues(userId.value)
+    // Fetch user info to get real name
+    await fetchUserInfo()
+    
+    // Use secure endpoint if we have initData (running in Telegram)
+    if (initDataRaw.value) {
+      console.log('🔐 Using secure API with Telegram auth')
+      leagues.value = await api.getMyLeagues()
+    } else {
+      // Fallback for development - use legacy endpoint
+      console.log('⚠️ Using legacy API (dev mode)')
+      leagues.value = await api.getUserLeagues(userId.value)
+    }
   } catch (err) {
-    if (err.response?.status === 404) {
+    if (err.response?.status === 401) {
+      error.value = 'احراز هویت ناموفق. لطفاً دوباره از تلگرام وارد شوید.'
+    } else if (err.response?.status === 404) {
       error.value = 'کاربر پیدا نشد. لطفاً اول در ربات ثبت‌نام کنید.'
     } else {
       error.value = 'خطا در دریافت لیگ‌ها'
@@ -51,6 +83,10 @@ const selectLeague = (league) => {
   emit('select-league', league)
 }
 
+const goToTelegram = () => {
+  openTelegramBot()
+}
+
 onMounted(() => {
   fetchLeagues()
 })
@@ -63,7 +99,7 @@ onMounted(() => {
       <div class="app-logo">🎮</div>
       <h1 class="app-title">MatchDay</h1>
       <p class="welcome-text">
-        سلام {{ userName }}! 👋
+        سلام {{ displayName() }}! 👋
       </p>
     </div>
 
@@ -78,10 +114,10 @@ onMounted(() => {
       <p class="not-telegram-text">
         برای استفاده از این اپلیکیشن، لطفاً از طریق ربات تلگرام وارد شوید.
       </p>
-      <a :href="`https://t.me/${BOT_USERNAME}`" class="telegram-btn">
+      <button class="telegram-btn" @click="goToTelegram">
         <span class="btn-icon">📱</span>
         باز کردن در تلگرام
-      </a>
+      </button>
       <p class="bot-info">
         @{{ BOT_USERNAME }}
       </p>
