@@ -146,6 +146,12 @@ async def root():
     return {"status": "ok", "message": "MatchDay API is running"}
 
 
+@app.get("/test")
+async def test_simple():
+    """Test without /api prefix"""
+    return {"test": "works", "db_exists": os.path.exists(DB_PATH)}
+
+
 @app.get("/api/ping")
 async def ping():
     """Simple ping - no database"""
