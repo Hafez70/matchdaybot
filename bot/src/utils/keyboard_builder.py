@@ -1,6 +1,9 @@
 """Keyboard builder utility"""
 from typing import List, Tuple
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+
+# Mini App URL
+MINI_APP_URL = "https://matchdayfc.ir"
 
 
 class KeyboardBuilder:
@@ -22,6 +25,11 @@ class KeyboardBuilder:
     def build_league_menu(league_code: str, is_owner: bool = False) -> InlineKeyboardMarkup:
         """Build league-specific menu"""
         keyboard = [
+            # Mini App button - opens league view in Telegram WebApp
+            [InlineKeyboardButton(
+                "📊 مشاهده لیگ",
+                web_app=WebAppInfo(url=f"{MINI_APP_URL}?league={league_code}")
+            )],
             [InlineKeyboardButton("⚽ ثبت مسابقه", callback_data=f'league_{league_code}_record_match')],
             [InlineKeyboardButton("👥 اعضای لیگ", callback_data=f'league_{league_code}_members')],
             [InlineKeyboardButton("📊 آمار من", callback_data=f'league_{league_code}_my_stats')],
