@@ -1,8 +1,11 @@
 """Registration handler"""
-from telegram import Update
+from telegram import Update, MenuButtonWebApp, WebAppInfo
 from telegram.ext import ContextTypes, ConversationHandler
 from .base_handler import BaseHandler
 from ..config import States, Messages
+
+# Mini App URL
+MINI_APP_URL = "https://matchdayfc.ir"
 
 
 class RegistrationHandler(BaseHandler):
@@ -11,6 +14,18 @@ class RegistrationHandler(BaseHandler):
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Handle /start command with deep link support"""
         user = update.effective_user
+        
+        # Set up Mini App menu button at the bottom of chat
+        try:
+            await context.bot.set_chat_menu_button(
+                chat_id=update.effective_chat.id,
+                menu_button=MenuButtonWebApp(
+                    text="📊 مینی‌اپ",
+                    web_app=WebAppInfo(url=MINI_APP_URL)
+                )
+            )
+        except Exception:
+            pass  # Ignore if setting menu button fails
         
         # Check for deep link parameter (e.g., /start join_LEAGUECODE)
         deep_link_param = None
