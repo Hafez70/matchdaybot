@@ -141,25 +141,25 @@ class UserLeague(BaseModel):
 # ============ API Routes ============
 
 @app.get("/")
-async def root():
+def root():
     """Health check"""
     return {"status": "ok", "message": "MatchDay API is running"}
 
 
 @app.get("/test")
-async def test_simple():
+def test_simple():
     """Test without /api prefix - super simple"""
     return {"test": "works"}
 
 
 @app.get("/test2")
-async def test_with_os():
+def test_with_os():
     """Test with os call"""
     return {"db_exists": os.path.exists(DB_PATH)}
 
 
 @app.get("/api/ping")
-async def ping():
+def ping():
     """Simple ping - no database"""
     return {
         "status": "pong",
