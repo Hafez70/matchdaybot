@@ -148,8 +148,14 @@ async def root():
 
 @app.get("/test")
 async def test_simple():
-    """Test without /api prefix"""
-    return {"test": "works", "db_exists": os.path.exists(DB_PATH)}
+    """Test without /api prefix - super simple"""
+    return {"test": "works"}
+
+
+@app.get("/test2")
+async def test_with_os():
+    """Test with os call"""
+    return {"db_exists": os.path.exists(DB_PATH)}
 
 
 @app.get("/api/ping")
