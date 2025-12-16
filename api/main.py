@@ -146,6 +146,12 @@ def root():
     return {"status": "ok", "message": "MatchDay API is running"}
 
 
+@app.get("/x")
+def x():
+    """Single char path test"""
+    return {"x": 1}
+
+
 @app.get("/test")
 def test_simple():
     """Test without /api prefix - super simple"""
