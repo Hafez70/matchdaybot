@@ -146,6 +146,18 @@ async def root():
     return {"status": "ok", "message": "MatchDay API is running"}
 
 
+@app.get("/api/ping")
+async def ping():
+    """Simple ping - no database"""
+    return {
+        "status": "pong",
+        "db_path": DB_PATH,
+        "db_exists": os.path.exists(DB_PATH),
+        "cwd": os.getcwd(),
+        "file": __file__
+    }
+
+
 @app.get("/api/debug")
 async def debug_info():
     """Debug endpoint to check API status"""
