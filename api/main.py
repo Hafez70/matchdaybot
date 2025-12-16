@@ -17,14 +17,17 @@ from pydantic import BaseModel
 from telegram_auth import TelegramUser, get_current_user, get_optional_user
 
 # ============ Logging Setup ============
+LOG_FILE = os.path.join(os.path.dirname(__file__), 'api_debug.log')
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(sys.stdout)
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(LOG_FILE, encoding='utf-8')
     ]
 )
 logger = logging.getLogger(__name__)
+logger.info(f"=== API Starting, log file: {LOG_FILE} ===")
 
 # Load environment variables
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', 'config.env'))
@@ -140,7 +143,53 @@ class UserLeague(BaseModel):
 @app.get("/")
 async def root():
     """Health check"""
-    return {"status": "ok", "message": "MatchDay API is running 🎮⚽"}
+    return {"status": "ok", "message": "MatchDay API is running"}
+
+
+@app.get("/api/debug")
+async def debug_info():
+    """Debug endpoint to check API status"""
+    db_exists = os.path.exists(DB_PATH)
+    db_readable = False
+    tables = []
+    user_count = 0
+    league_count = 0
+    error_msg = None
+    
+    try:
+        if db_exists:
+            with get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                tables = [row['name'] for row in cursor.fetchall()]
+                cursor.execute("SELECT COUNT(*) as cnt FROM users")
+                user_count = cursor.fetchone()['cnt']
+                cursor.execute("SELECT COUNT(*) as cnt FROM leagues")
+                league_count = cursor.fetchone()['cnt']
+                db_readable = True
+    except Exception as e:
+        error_msg = str(e)
+    
+    # Read last 20 lines of log
+    log_lines = []
+    try:
+        if os.path.exists(LOG_FILE):
+            with open(LOG_FILE, 'r', encoding='utf-8') as f:
+                log_lines = f.readlines()[-20:]
+    except Exception:
+        pass
+    
+    return {
+        "db_path": DB_PATH,
+        "db_exists": db_exists,
+        "db_readable": db_readable,
+        "tables": tables,
+        "user_count": user_count,
+        "league_count": league_count,
+        "error": error_msg,
+        "cwd": os.getcwd(),
+        "recent_logs": log_lines
+    }
 
 
 @app.get("/api/me")
