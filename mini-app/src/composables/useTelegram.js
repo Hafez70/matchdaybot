@@ -1,11 +1,13 @@
 /**
  * Telegram WebApp Composable
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, shallowRef, computed, onMounted } from 'vue'
 import { setTelegramInitData } from '../services/api'
 
 export function useTelegram() {
-  const webApp = ref(null)
+  // Use shallowRef to avoid Vue wrapping Telegram WebApp in a deep proxy
+  // This prevents errors with read-only properties like HapticFeedback
+  const webApp = shallowRef(null)
   const user = ref(null)
   const initData = ref(null)
   const initDataRaw = ref(null) // Raw init data for server validation
