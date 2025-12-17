@@ -36,16 +36,19 @@ const apiClient = axios.create({
   }
 })
 
-// Request interceptor - add Authorization header
+// Request interceptor - add auth headers
 apiClient.interceptors.request.use(
   (config) => {
     console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`)
     console.log(`🔑 telegramInitData available: ${!!telegramInitData}`)
     
-    // Add Telegram auth header if available
+    // Add Telegram auth headers if available
     if (telegramInitData) {
+      // Standard Authorization header
       config.headers.Authorization = `tma ${telegramInitData}`
-      console.log(`🔑 Authorization header set: tma ${telegramInitData.substring(0, 50)}...`)
+      // Custom header for Apache proxy (Authorization gets stripped)
+      config.headers['X-Telegram-Init-Data'] = telegramInitData
+      console.log(`🔑 Auth headers set (length: ${telegramInitData.length})`)
     } else {
       console.warn(`⚠️ No telegramInitData available for auth!`)
     }

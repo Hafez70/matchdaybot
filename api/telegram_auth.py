@@ -12,7 +12,7 @@ from typing import Optional
 from dataclasses import dataclass
 from pathlib import Path
 
-from fastapi import HTTPException, Depends
+from fastapi import HTTPException, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 
@@ -132,10 +132,12 @@ def validate_init_data(init_data: str, bot_token: str, expires_in: int = 3600) -
 
 
 async def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> TelegramUser:
     """
     FastAPI dependency to get authenticated Telegram user.
+    Checks both Authorization header and X-Telegram-Init-Data header (for Apache proxy).
     
     Usage:
         @app.get("/protected")
@@ -145,21 +147,24 @@ async def get_current_user(
     import logging
     logger = logging.getLogger(__name__)
     
-    if not credentials:
+    init_data_raw: Optional[str] = None
+    
+    # Try Authorization header first
+    if credentials and credentials.scheme.lower() == "tma":
+        init_data_raw = credentials.credentials
+        logger.info("🔐 Auth via Authorization header")
+    
+    # Fallback to X-Telegram-Init-Data header (Apache strips Authorization)
+    if not init_data_raw:
+        init_data_raw = request.headers.get("X-Telegram-Init-Data")
+        if init_data_raw:
+            logger.info("🔐 Auth via X-Telegram-Init-Data header")
+    
+    if not init_data_raw:
         logger.warning("🔴 Auth failed: No credentials provided")
         raise HTTPException(
             status_code=401,
             detail="Authorization header missing"
-        )
-    
-    logger.info(f"🔐 Auth attempt - scheme: {credentials.scheme}")
-    
-    # Check auth type is "tma"
-    if credentials.scheme.lower() != "tma":
-        logger.warning(f"🔴 Auth failed: Invalid scheme '{credentials.scheme}'")
-        raise HTTPException(
-            status_code=401,
-            detail=f"Invalid authorization scheme: {credentials.scheme}. Expected 'tma'"
         )
     
     if not BOT_TOKEN:
@@ -172,12 +177,12 @@ async def get_current_user(
     logger.info(f"🔐 BOT_TOKEN present: {BOT_TOKEN[:10]}...")
     
     try:
-        init_data = validate_init_data(credentials.credentials, BOT_TOKEN)
+        init_data = validate_init_data(init_data_raw, BOT_TOKEN)
         logger.info(f"✅ Auth success for user {init_data.user.id}")
         return init_data.user
     except ValueError as e:
         logger.warning(f"🔴 Auth failed: {e}")
-        logger.debug(f"🔴 Init data (first 100 chars): {credentials.credentials[:100]}...")
+        logger.debug(f"🔴 Init data (first 100 chars): {init_data_raw[:100]}...")
         raise HTTPException(
             status_code=401,
             detail=str(e)
