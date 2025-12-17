@@ -200,10 +200,7 @@ watch(isReady, (ready) => {
         <h1 class="app-title">MatchDay</h1>
       </div>
       <div class="header-right">
-        <div class="user-badge" v-if="!loading && !error && !notInTelegram">
-          <span class="user-name">{{ displayName }}</span>
-          <span class="user-icon">👤</span>
-        </div>
+        <span class="user-name" v-if="!loading && !error && !notInTelegram">{{ displayName }}</span>
       </div>
     </header>
 
@@ -521,26 +518,14 @@ watch(isReady, (ready) => {
   margin: 0;
 }
 
-.user-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--bg-secondary);
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 13px;
-}
-
 .user-name {
   color: var(--text-secondary);
-  max-width: 80px;
+  font-size: 13px;
+  max-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.user-icon {
-  font-size: 14px;
+  text-align: left;
 }
 
 /* State containers */
