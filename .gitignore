@@ -68,7 +68,8 @@ Thumbs.db
 
 # Node.js (mini-app)
 node_modules/
-dist/
+# dist/ - NOT ignored, we need mini-app/dist for deployment
+!mini-app/dist/
 .env.local
 .env.*.local
 *.local
