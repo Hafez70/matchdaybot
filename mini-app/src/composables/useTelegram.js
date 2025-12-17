@@ -70,30 +70,40 @@ export function useTelegram() {
         hasInitData: !!initDataRaw.value
       })
     } else {
-      // Development mode - mock data
-      console.warn('⚠️ Telegram WebApp not available - using mock data')
+      // Not in Telegram - check if DEV mode
+      const isDevMode = import.meta.env.DEV
       
-      // Set isTelegram to true in dev mode so the app works normally
-      isTelegram.value = true
-      
-      // Check URL for league param
-      const urlParams = new URLSearchParams(window.location.search)
-      const urlLeague = urlParams.get('league')
-      if (urlLeague) {
-        leagueCode.value = urlLeague
+      if (isDevMode) {
+        // Development mode - use mock data
+        console.warn('⚠️ DEV MODE: Telegram WebApp not available - using mock data')
+        
+        // Set isTelegram to true in dev mode so the app works normally
+        isTelegram.value = true
+        
+        // Check URL for league param
+        const urlParams = new URLSearchParams(window.location.search)
+        const urlLeague = urlParams.get('league')
+        if (urlLeague) {
+          leagueCode.value = urlLeague
+        }
+        
+        // Mock user for testing (matches DEV_USER_ID in config.env)
+        user.value = {
+          id: 93205092,
+          first_name: 'Test User',
+          last_name: 'Dev'
+        }
+        
+        console.log('🧪 Dev mode user set:', user.value)
+        
+        // Note: In dev mode, we don't have real initData
+        // API should have DEV_MODE=true to bypass auth
+      } else {
+        // Production mode - user must open from Telegram
+        console.warn('🚫 PRODUCTION: Not opened from Telegram')
+        isTelegram.value = false
+        user.value = null
       }
-      
-      // Mock user for testing (matches DEV_USER_ID in config.env)
-      user.value = {
-        id: 93205092,
-        first_name: 'Test User',
-        last_name: 'Dev'
-      }
-      
-      console.log('🧪 Dev mode user set:', user.value)
-      
-      // Note: In dev mode, we don't have real initData
-      // API should have DEV_MODE=true to bypass auth
       
       isReady.value = true
     }

@@ -9,15 +9,20 @@ import PlayerStatsView from './components/PlayerStatsView.vue'
 
 const { isReady, userName, userId, hapticFeedback, isTelegram, initDataRaw, openTelegramBot, shareUrl } = useTelegram()
 
+// Check if in dev mode
+const isDevMode = import.meta.env.DEV
+
 // App state
 const currentView = ref('leagues') // 'leagues' | 'detail' | 'leaderboard' | 'members' | 'stats' | 'matches'
 const selectedLeague = ref(null)
 const leagues = ref([])
 const loading = ref(true)
 const error = ref(null)
-const notInTelegram = ref(false)
 const realUserName = ref(null)
 const copySuccess = ref(false)
+
+// Computed: not in telegram (only in production)
+const notInTelegram = computed(() => isReady.value && !isTelegram.value && !isDevMode)
 
 // Bot username for links
 const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME || 'frontAssistantbot'
@@ -50,10 +55,8 @@ const fetchUserInfo = async () => {
 }
 
 const fetchLeagues = async () => {
-  const isDevMode = import.meta.env.DEV
-  
-  if (!isTelegram.value && !isDevMode) {
-    notInTelegram.value = true
+  // Don't fetch if not in Telegram (in production)
+  if (notInTelegram.value) {
     loading.value = false
     return
   }
