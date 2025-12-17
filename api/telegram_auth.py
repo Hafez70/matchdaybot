@@ -142,29 +142,42 @@ async def get_current_user(
         async def protected_route(user: TelegramUser = Depends(get_current_user)):
             return {"user_id": user.id}
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     if not credentials:
+        logger.warning("🔴 Auth failed: No credentials provided")
         raise HTTPException(
             status_code=401,
             detail="Authorization header missing"
         )
     
+    logger.info(f"🔐 Auth attempt - scheme: {credentials.scheme}")
+    
     # Check auth type is "tma"
     if credentials.scheme.lower() != "tma":
+        logger.warning(f"🔴 Auth failed: Invalid scheme '{credentials.scheme}'")
         raise HTTPException(
             status_code=401,
             detail=f"Invalid authorization scheme: {credentials.scheme}. Expected 'tma'"
         )
     
     if not BOT_TOKEN:
+        logger.error("🔴 Auth failed: BOT_TOKEN not configured!")
         raise HTTPException(
             status_code=500,
             detail="Bot token not configured"
         )
     
+    logger.info(f"🔐 BOT_TOKEN present: {BOT_TOKEN[:10]}...")
+    
     try:
         init_data = validate_init_data(credentials.credentials, BOT_TOKEN)
+        logger.info(f"✅ Auth success for user {init_data.user.id}")
         return init_data.user
     except ValueError as e:
+        logger.warning(f"🔴 Auth failed: {e}")
+        logger.debug(f"🔴 Init data (first 100 chars): {credentials.credentials[:100]}...")
         raise HTTPException(
             status_code=401,
             detail=str(e)
