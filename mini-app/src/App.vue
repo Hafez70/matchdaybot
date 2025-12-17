@@ -164,6 +164,15 @@ const getBarWidth = (type) => {
   return `${(value / total) * 100}%`
 }
 
+// Calculate qualification progress percentage
+const getQualificationProgress = () => {
+  if (!selectedLeague.value) return '0%'
+  const current = selectedLeague.value.my_matches || 0
+  const required = selectedLeague.value.min_matches || 1
+  const percentage = Math.min((current / required) * 100, 100)
+  return `${percentage}%`
+}
+
 onMounted(() => {
   if (isReady.value) {
     fetchLeagues()
@@ -319,14 +328,6 @@ watch(isReady, (ready) => {
           </div>
         </div>
 
-        <!-- Not Qualified Notice (if applicable) -->
-        <div v-if="!selectedLeague?.qualified" class="qualification-notice compact">
-          <span class="notice-emoji">⏳</span>
-          <span class="notice-text">
-            {{ selectedLeague?.matches_needed }} بازی دیگر برای رتبه‌بندی
-          </span>
-        </div>
-
         <!-- Row 2: Performance Numbers Card -->
         <div class="performance-numbers-card">
           <div class="perf-stat">
@@ -349,8 +350,8 @@ watch(isReady, (ready) => {
           </div>
         </div>
 
-        <!-- Row 3: Performance Chart -->
-        <div class="performance-chart-card">
+        <!-- Row 3: Performance Chart (if qualified) -->
+        <div v-if="selectedLeague?.qualified" class="performance-chart-card">
           <h3 class="chart-title">عملکرد</h3>
           <div class="chart-bar">
             <div 
@@ -376,6 +377,27 @@ watch(isReady, (ready) => {
             <span class="legend-item"><span class="dot win"></span> برد</span>
             <span class="legend-item"><span class="dot draw"></span> مساوی</span>
             <span class="legend-item"><span class="dot loss"></span> باخت</span>
+          </div>
+        </div>
+
+        <!-- Row 3: Qualification Progress (if not qualified) -->
+        <div v-else class="qualification-progress-card">
+          <p class="qualification-text">
+            برای قرار گیری در رتبه بندی باید حداقل 
+            <strong>{{ selectedLeague?.min_matches }}</strong> 
+            بازی در این لیگ داشته باشید
+          </p>
+          <div class="progress-container">
+            <div class="progress-bar">
+              <div 
+                class="progress-fill" 
+                :style="{ width: getQualificationProgress() }"
+              ></div>
+            </div>
+            <div class="progress-labels">
+              <span class="progress-current">{{ selectedLeague?.my_matches || 0 }} بازی</span>
+              <span class="progress-target">{{ selectedLeague?.min_matches }} بازی</span>
+            </div>
           </div>
         </div>
 
@@ -1243,6 +1265,65 @@ watch(isReady, (ready) => {
 
 .dot.loss {
   background: #ef4444;
+}
+
+/* Qualification Progress Card */
+.qualification-progress-card {
+  background: var(--card-bg);
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  text-align: center;
+}
+
+.qualification-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 16px 0;
+}
+
+.qualification-text strong {
+  color: var(--warning);
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.progress-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.progress-bar {
+  height: 24px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  border-radius: 12px;
+  transition: width 0.5s ease;
+  min-width: 8%;
+}
+
+.progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.progress-current {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.progress-target {
+  color: var(--text-muted);
 }
 
 /* New Menu Grid */

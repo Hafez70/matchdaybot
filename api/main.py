@@ -150,6 +150,7 @@ class UserLeague(BaseModel):
     my_goal_difference: int
     qualified: bool  # Whether user meets 20% threshold
     matches_needed: int  # How many more matches needed (0 if qualified)
+    min_matches: int  # Minimum matches required (20% threshold)
 
 
 # ============ API Routes ============
@@ -282,7 +283,8 @@ async def get_my_leagues(user: TelegramUser = Depends(get_current_user)):
                 "my_draws": my_draws,
                 "my_goal_difference": my_goal_difference,
                 "qualified": qualified,
-                "matches_needed": matches_needed
+                "matches_needed": matches_needed,
+                "min_matches": min_threshold
             })
         
         return leagues
