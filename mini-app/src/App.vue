@@ -241,7 +241,8 @@ watch(isReady, (ready) => {
               <span class="league-members">{{ league.member_count }} 👥</span>
             </div>
             <div class="league-card-divider"></div>
-            <div class="league-card-stats">
+            <!-- Qualified: Show stats -->
+            <div v-if="league.qualified" class="league-card-stats">
               <div class="card-stat">
                 <span class="card-stat-label">امتیاز</span>
                 <span class="card-stat-value" :class="{ positive: league.my_points > 0, negative: league.my_points < 0 }">
@@ -252,6 +253,13 @@ watch(isReady, (ready) => {
                 <span class="card-stat-label">رتبه</span>
                 <span class="card-stat-value rank">#{{ league.my_rank || '-' }}</span>
               </div>
+            </div>
+            <!-- Not Qualified: Show message -->
+            <div v-else class="league-card-notice">
+              <span class="notice-icon">⏳</span>
+              <span class="notice-text">
+                برای رتبه‌بندی {{ league.matches_needed }} بازی دیگر انجام دهید
+              </span>
             </div>
             <div class="card-arrow">←</div>
           </div>
@@ -266,8 +274,8 @@ watch(isReady, (ready) => {
           <p class="detail-meta">{{ selectedLeague?.member_count }} عضو</p>
         </div>
 
-        <!-- My Stats -->
-        <div class="my-stats-card">
+        <!-- My Stats - Qualified -->
+        <div v-if="selectedLeague?.qualified" class="my-stats-card">
           <div class="my-stat">
             <span class="my-stat-value" :class="{ positive: selectedLeague?.my_points > 0, negative: selectedLeague?.my_points < 0 }">
               {{ selectedLeague?.my_points > 0 ? '+' : '' }}{{ selectedLeague?.my_points }}
@@ -278,6 +286,22 @@ watch(isReady, (ready) => {
           <div class="my-stat">
             <span class="my-stat-value">#{{ selectedLeague?.my_rank || '-' }}</span>
             <span class="my-stat-label">رتبه من</span>
+          </div>
+        </div>
+        
+        <!-- Not Qualified Notice -->
+        <div v-else class="qualification-notice">
+          <div class="notice-header">
+            <span class="notice-emoji">⏳</span>
+            <span class="notice-title">هنوز در رتبه‌بندی نیستید</span>
+          </div>
+          <p class="notice-desc">
+            برای ورود به جدول رتبه‌بندی، باید حداقل 
+            <strong>{{ selectedLeague?.matches_needed }}</strong> 
+            بازی دیگر انجام دهید.
+          </p>
+          <div class="notice-progress">
+            <span class="progress-label">بازی‌های شما: {{ selectedLeague?.my_matches || 0 }}</span>
           </div>
         </div>
 
@@ -611,6 +635,27 @@ watch(isReady, (ready) => {
   color: var(--text-muted);
 }
 
+/* Not Qualified Notice */
+.league-card-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(251, 191, 36, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.notice-icon {
+  font-size: 16px;
+}
+
+.notice-text {
+  font-size: 12px;
+  color: var(--warning);
+  line-height: 1.4;
+}
+
 /* Detail Header */
 .detail-header {
   text-align: center;
@@ -677,6 +722,57 @@ watch(isReady, (ready) => {
   width: 1px;
   height: 50px;
   background: var(--border);
+}
+
+/* Qualification Notice */
+.qualification-notice {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 16px;
+  padding: 20px;
+  text-align: center;
+}
+
+.notice-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.notice-emoji {
+  font-size: 24px;
+}
+
+.notice-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--warning);
+}
+
+.notice-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 12px 0;
+}
+
+.notice-desc strong {
+  color: var(--warning);
+  font-weight: 700;
+}
+
+.notice-progress {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 8px 16px;
+  border-radius: 8px;
+  display: inline-block;
+}
+
+.progress-label {
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 /* Menu Grid */

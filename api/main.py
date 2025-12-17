@@ -103,13 +103,20 @@ class LeagueInfo(BaseModel):
 class PlayerStats(BaseModel):
     telegram_id: int
     name: str
-    rank: int
+    rank: Optional[int]  # None for unqualified players
     points: int
     matches: int
     wins: int
     losses: int
     draws: int
     goal_difference: int
+    qualified: bool = True  # Whether player meets 20% threshold
+
+
+class LeaderboardResponse(BaseModel):
+    qualified: list[PlayerStats]
+    unqualified: list[PlayerStats]
+    min_matches: int  # Minimum matches needed to qualify
 
 
 class MatchInfo(BaseModel):
@@ -135,7 +142,10 @@ class UserLeague(BaseModel):
     member_count: int
     is_owner: bool
     my_points: int
-    my_rank: int
+    my_rank: Optional[int]  # None if not qualified
+    my_matches: int
+    qualified: bool  # Whether user meets 20% threshold
+    matches_needed: int  # How many more matches needed (0 if qualified)
 
 
 # ============ API Routes ============
@@ -182,9 +192,10 @@ async def get_my_leagues(user: TelegramUser = Depends(get_current_user)):
         
         leagues = []
         for row in cursor.fetchall():
-            # Calculate user's points
+            # Get user's match count and stats
             cursor.execute("""
                 SELECT 
+                    COUNT(DISTINCT mp.match_id) as matches,
                     COALESCE(SUM(CASE 
                         WHEN (mp.team_number = 1 AND m.team1_score > m.team2_score) OR
                              (mp.team_number = 2 AND m.team2_score > m.team1_score)
@@ -198,29 +209,51 @@ async def get_my_leagues(user: TelegramUser = Depends(get_current_user)):
                 WHERE mp.telegram_id = ?
             """, (row['code'], user.id))
             stats = cursor.fetchone()
+            my_matches = stats['matches'] or 0
             my_points = (stats['wins'] or 0) - (stats['losses'] or 0)
             
-            # Get rank (count players with more points + 1)
+            # Get max matches in league (for 20% threshold)
             cursor.execute("""
-                SELECT COUNT(*) + 1 as rank
-                FROM (
-                    SELECT mp.telegram_id,
-                        SUM(CASE 
-                            WHEN (mp.team_number = 1 AND m.team1_score > m.team2_score) OR
-                                 (mp.team_number = 2 AND m.team2_score > m.team1_score)
-                            THEN 1 ELSE 0 END) -
-                        SUM(CASE 
-                            WHEN (mp.team_number = 1 AND m.team1_score < m.team2_score) OR
-                                 (mp.team_number = 2 AND m.team2_score < m.team1_score)
-                            THEN 1 ELSE 0 END) as points
+                SELECT MAX(match_count) as max_matches FROM (
+                    SELECT COUNT(DISTINCT mp.match_id) as match_count
                     FROM match_players mp
                     JOIN matches m ON mp.match_id = m.id AND m.league_code = ?
                     GROUP BY mp.telegram_id
-                    HAVING points > ?
                 )
-            """, (row['code'], my_points))
-            rank_result = cursor.fetchone()
-            my_rank = rank_result['rank'] if rank_result else 1
+            """, (row['code'],))
+            max_result = cursor.fetchone()
+            max_matches = max_result['max_matches'] or 0
+            
+            # Calculate threshold (20% of max)
+            min_threshold = int(max_matches * 0.20)
+            qualified = my_matches >= min_threshold if min_threshold > 0 else True
+            matches_needed = max(0, min_threshold - my_matches) if not qualified else 0
+            
+            # Get rank only if qualified
+            my_rank = None
+            if qualified:
+                # Count players with more points who are also qualified
+                cursor.execute("""
+                    SELECT COUNT(*) + 1 as rank
+                    FROM (
+                        SELECT mp.telegram_id,
+                            COUNT(DISTINCT mp.match_id) as match_count,
+                            SUM(CASE 
+                                WHEN (mp.team_number = 1 AND m.team1_score > m.team2_score) OR
+                                     (mp.team_number = 2 AND m.team2_score > m.team1_score)
+                                THEN 1 ELSE 0 END) -
+                            SUM(CASE 
+                                WHEN (mp.team_number = 1 AND m.team1_score < m.team2_score) OR
+                                     (mp.team_number = 2 AND m.team2_score < m.team1_score)
+                                THEN 1 ELSE 0 END) as points
+                        FROM match_players mp
+                        JOIN matches m ON mp.match_id = m.id AND m.league_code = ?
+                        GROUP BY mp.telegram_id
+                        HAVING match_count >= ? AND points > ?
+                    )
+                """, (row['code'], min_threshold, my_points))
+                rank_result = cursor.fetchone()
+                my_rank = rank_result['rank'] if rank_result else 1
             
             leagues.append({
                 "code": row['code'],
@@ -228,7 +261,10 @@ async def get_my_leagues(user: TelegramUser = Depends(get_current_user)):
                 "member_count": row['member_count'],
                 "is_owner": row['owner_telegram_id'] == user.id,
                 "my_points": my_points,
-                "my_rank": my_rank
+                "my_rank": my_rank,
+                "my_matches": my_matches,
+                "qualified": qualified,
+                "matches_needed": matches_needed
             })
         
         return leagues
@@ -377,12 +413,12 @@ async def get_league_info(league_code: str):
         )
 
 
-@app.get("/api/league/{league_code}/leaderboard", response_model=list[PlayerStats])
+@app.get("/api/league/{league_code}/leaderboard", response_model=LeaderboardResponse)
 async def get_leaderboard(
     league_code: str,
     user_id: Optional[int] = Query(None, description="Telegram user ID for filtering")
 ):
-    """Get league leaderboard with 20% participation filter"""
+    """Get league leaderboard with qualified and unqualified sections"""
     with get_db() as conn:
         cursor = conn.cursor()
         
@@ -433,31 +469,32 @@ async def get_leaderboard(
             })
         
         if not players:
-            return []
+            return LeaderboardResponse(qualified=[], unqualified=[], min_matches=0)
         
-        # Calculate max matches and filter
+        # Calculate max matches and threshold
         max_matches = max(p['matches'] for p in players)
         min_threshold = int(max_matches * 0.20)
         
-        filtered = []
-        user_included = False
+        # Separate qualified and unqualified
+        qualified_players = []
+        unqualified_players = []
         
         for p in players:
             if p['matches'] >= min_threshold:
-                filtered.append(p)
-                if user_id and p['telegram_id'] == user_id:
-                    user_included = True
-            elif user_id and p['telegram_id'] == user_id:
-                filtered.append(p)
-                user_included = True
+                qualified_players.append(p)
+            else:
+                unqualified_players.append(p)
         
-        # Sort by points, goal difference, wins
-        filtered.sort(key=lambda x: (x['points'], x['goal_difference'], x['wins']), reverse=True)
+        # Sort qualified by points, goal difference, wins
+        qualified_players.sort(key=lambda x: (x['points'], x['goal_difference'], x['wins']), reverse=True)
         
-        # Assign ranks
-        result = []
-        for i, p in enumerate(filtered, 1):
-            result.append(PlayerStats(
+        # Sort unqualified by matches (most matches first)
+        unqualified_players.sort(key=lambda x: x['matches'], reverse=True)
+        
+        # Build qualified list with ranks
+        qualified_result = []
+        for i, p in enumerate(qualified_players, 1):
+            qualified_result.append(PlayerStats(
                 telegram_id=p['telegram_id'],
                 name=p['name'],
                 rank=i,
@@ -466,10 +503,31 @@ async def get_leaderboard(
                 wins=p['wins'],
                 losses=p['losses'],
                 draws=p['draws'],
-                goal_difference=p['goal_difference']
+                goal_difference=p['goal_difference'],
+                qualified=True
             ))
         
-        return result
+        # Build unqualified list (no rank)
+        unqualified_result = []
+        for p in unqualified_players:
+            unqualified_result.append(PlayerStats(
+                telegram_id=p['telegram_id'],
+                name=p['name'],
+                rank=None,
+                points=p['points'],
+                matches=p['matches'],
+                wins=p['wins'],
+                losses=p['losses'],
+                draws=p['draws'],
+                goal_difference=p['goal_difference'],
+                qualified=False
+            ))
+        
+        return LeaderboardResponse(
+            qualified=qualified_result,
+            unqualified=unqualified_result,
+            min_matches=min_threshold
+        )
 
 
 @app.get("/api/league/{league_code}/matches", response_model=list[MatchInfo])
