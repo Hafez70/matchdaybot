@@ -24,6 +24,10 @@ if config_path.exists():
 # Get bot token from environment
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 
+# Development mode - bypass auth for local testing
+DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
+DEV_USER_ID = int(os.getenv("DEV_USER_ID", "93205092"))
+
 # Security scheme
 security = HTTPBearer(auto_error=False)
 
@@ -138,6 +142,7 @@ async def get_current_user(
     """
     FastAPI dependency to get authenticated Telegram user.
     Checks both Authorization header and X-Telegram-Init-Data header (for Apache proxy).
+    In DEV_MODE, returns a mock user for local testing.
     
     Usage:
         @app.get("/protected")
@@ -147,12 +152,21 @@ async def get_current_user(
     import logging
     logger = logging.getLogger(__name__)
     
+    # DEV MODE: Return mock user for local testing
+    if DEV_MODE:
+        logger.info(f"[DEV MODE] Returning mock user ID: {DEV_USER_ID}")
+        return TelegramUser(
+            id=DEV_USER_ID,
+            first_name="Dev User",
+            username="devuser"
+        )
+    
     init_data_raw: Optional[str] = None
     
     # Try Authorization header first
     if credentials and credentials.scheme.lower() == "tma":
         init_data_raw = credentials.credentials
-        logger.info("🔐 Auth via Authorization header")
+        logger.info("Auth via Authorization header")
     
     # Fallback to X-Telegram-Init-Data header (Apache strips Authorization)
     if not init_data_raw:

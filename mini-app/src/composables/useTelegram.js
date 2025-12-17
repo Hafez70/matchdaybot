@@ -20,8 +20,12 @@ export function useTelegram() {
 
   onMounted(() => {
     // Initialize Telegram WebApp
-    if (window.Telegram?.WebApp) {
-      webApp.value = window.Telegram.WebApp
+    // Check if we're REALLY inside Telegram (has initData with user)
+    const telegramWebApp = window.Telegram?.WebApp
+    const hasRealUser = telegramWebApp?.initDataUnsafe?.user?.id
+    
+    if (telegramWebApp && hasRealUser) {
+      webApp.value = telegramWebApp
       isTelegram.value = true
       
       // Expand to full height
@@ -31,9 +35,7 @@ export function useTelegram() {
       webApp.value.ready()
       
       // Get user info
-      if (webApp.value.initDataUnsafe?.user) {
-        user.value = webApp.value.initDataUnsafe.user
-      }
+      user.value = webApp.value.initDataUnsafe.user
       
       // Get init data (raw string for server auth)
       initDataRaw.value = webApp.value.initData
@@ -68,7 +70,9 @@ export function useTelegram() {
     } else {
       // Development mode - mock data
       console.warn('⚠️ Telegram WebApp not available - using mock data')
-      isTelegram.value = false
+      
+      // Set isTelegram to true in dev mode so the app works normally
+      isTelegram.value = true
       
       // Check URL for league param
       const urlParams = new URLSearchParams(window.location.search)
@@ -76,17 +80,18 @@ export function useTelegram() {
       if (urlLeague) {
         leagueCode.value = urlLeague
       }
-      // Don't set default league - let user select from list
       
-      // Mock user for testing
+      // Mock user for testing (matches DEV_USER_ID in config.env)
       user.value = {
         id: 93205092,
         first_name: 'Test User',
         last_name: 'Dev'
       }
       
+      console.log('🧪 Dev mode user set:', user.value)
+      
       // Note: In dev mode, we don't have real initData
-      // API calls will work without auth for public endpoints
+      // API should have DEV_MODE=true to bypass auth
       
       isReady.value = true
     }
