@@ -200,12 +200,35 @@ async def get_my_leagues(user: TelegramUser = Depends(get_current_user)):
             stats = cursor.fetchone()
             my_points = (stats['wins'] or 0) - (stats['losses'] or 0)
             
+            # Get rank (count players with more points + 1)
+            cursor.execute("""
+                SELECT COUNT(*) + 1 as rank
+                FROM (
+                    SELECT mp.telegram_id,
+                        SUM(CASE 
+                            WHEN (mp.team_number = 1 AND m.team1_score > m.team2_score) OR
+                                 (mp.team_number = 2 AND m.team2_score > m.team1_score)
+                            THEN 1 ELSE 0 END) -
+                        SUM(CASE 
+                            WHEN (mp.team_number = 1 AND m.team1_score < m.team2_score) OR
+                                 (mp.team_number = 2 AND m.team2_score < m.team1_score)
+                            THEN 1 ELSE 0 END) as points
+                    FROM match_players mp
+                    JOIN matches m ON mp.match_id = m.id AND m.league_code = ?
+                    GROUP BY mp.telegram_id
+                    HAVING points > ?
+                )
+            """, (row['code'], my_points))
+            rank_result = cursor.fetchone()
+            my_rank = rank_result['rank'] if rank_result else 1
+            
             leagues.append({
                 "code": row['code'],
                 "name": row['name'],
                 "member_count": row['member_count'],
                 "is_owner": row['owner_telegram_id'] == user.id,
-                "my_points": my_points
+                "my_points": my_points,
+                "my_rank": my_rank
             })
         
         return leagues
