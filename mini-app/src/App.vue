@@ -313,7 +313,6 @@ watch(isReady, (ready) => {
             </div>
             <div class="stat-item">
               <span class="stat-value members-value">
-                <span class="members-icon">👥</span>
                 {{ selectedLeague?.member_count }}
               </span>
               <span class="stat-label">عضو</span>
@@ -401,7 +400,7 @@ watch(isReady, (ready) => {
           </div>
         </div>
 
-        <!-- Row 4: Menu Buttons -->
+        <!-- Row 4: Menu Buttons (2x2 grid) -->
         <div class="menu-grid-new">
           <button class="menu-btn-new" @click="openView('leaderboard')">
             <span class="menu-icon-new">🏆</span>
@@ -411,20 +410,36 @@ watch(isReady, (ready) => {
             <span class="menu-icon-new">👥</span>
             <span class="menu-label-new">اعضای لیگ</span>
           </button>
-          <button class="menu-btn-new full-width" @click="openView('add-match')">
-            <span class="menu-label-new">ثبت مسابقه</span>
-          </button>
           <button class="menu-btn-new" @click="openView('matches')">
             <span class="menu-icon-new">⚽</span>
             <span class="menu-label-new">مسابقات اخیر</span>
           </button>
+          <button class="menu-btn-new" @click="openView('add-match')">
+            <span class="menu-icon-new">📝</span>
+            <span class="menu-label-new">ثبت مسابقه</span>
+          </button>
         </div>
 
-        <!-- Share Section (collapsed) -->
-        <div class="share-section-compact">
-          <button class="share-toggle" @click="shareLeague">
-            <span>📤</span> دعوت از دوستان
-          </button>
+        <!-- Share Section -->
+        <div class="share-section">
+          <h3 class="share-title">دعوت از دوستان</h3>
+          
+          <div class="share-code-box">
+            <div class="code-label">کد عضویت:</div>
+            <div class="code-value">{{ selectedLeague?.code }}</div>
+            <button class="copy-btn" @click="copyCode">
+              {{ copySuccess ? '✓' : '📋' }}
+            </button>
+          </div>
+
+          <div class="share-buttons">
+            <button class="share-btn link-btn" @click="copyLink">
+              <span>🔗</span> کپی لینک
+            </button>
+            <button class="share-btn telegram-btn" @click="shareLeague">
+              <span>📤</span> اشتراک‌گذاری
+            </button>
+          </div>
         </div>
       </template>
 
@@ -1345,43 +1360,11 @@ watch(isReady, (ready) => {
   transform: scale(0.98);
 }
 
-.menu-btn-new.full-width {
-  grid-column: span 2;
-  background: linear-gradient(135deg, #8b5cf6, #6366f1);
-  border: none;
-  color: white;
-}
-
 .menu-icon-new {
   font-size: 18px;
 }
 
 .menu-label-new {
   font-size: 14px;
-}
-
-/* Share Section Compact */
-.share-section-compact {
-  display: flex;
-  justify-content: center;
-}
-
-.share-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  padding: 12px 24px;
-  border-radius: 12px;
-  cursor: pointer;
-  color: var(--text-secondary);
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.share-toggle:hover {
-  border-color: var(--primary);
-  color: var(--text-primary);
 }
 </style>
