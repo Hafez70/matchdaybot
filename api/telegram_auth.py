@@ -10,10 +10,16 @@ import time
 from urllib.parse import parse_qsl
 from typing import Optional
 from dataclasses import dataclass
+from pathlib import Path
 
 from fastapi import HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from dotenv import load_dotenv
 
+# Load environment variables from config.env
+config_path = Path(__file__).parent.parent / "config.env"
+if config_path.exists():
+    load_dotenv(config_path)
 
 # Get bot token from environment
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
