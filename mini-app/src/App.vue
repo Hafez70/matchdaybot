@@ -147,6 +147,23 @@ const shareLeague = () => {
   shareUrl(joinLink.value, text)
 }
 
+// Calculate bar width for performance chart
+const getBarWidth = (type) => {
+  if (!selectedLeague.value) return '0%'
+  const wins = selectedLeague.value.my_wins || 0
+  const draws = selectedLeague.value.my_draws || 0
+  const losses = selectedLeague.value.my_losses || 0
+  const total = wins + draws + losses
+  if (total === 0) return '0%'
+  
+  let value = 0
+  if (type === 'wins') value = wins
+  else if (type === 'draws') value = draws
+  else if (type === 'losses') value = losses
+  
+  return `${(value / total) * 100}%`
+}
+
 onMounted(() => {
   if (isReady.value) {
     fetchLeagues()
@@ -268,76 +285,124 @@ watch(isReady, (ready) => {
 
       <!-- League Detail View -->
       <template v-else-if="currentView === 'detail'">
-        <div class="detail-header">
-          <div class="detail-icon">{{ selectedLeague?.is_owner ? '👑' : '🏆' }}</div>
-          <h2 class="detail-title">{{ selectedLeague?.name }}</h2>
-          <p class="detail-meta">{{ selectedLeague?.member_count }} عضو</p>
+        <!-- Row 1: Stats & League Info Card -->
+        <div class="stats-league-card">
+          <!-- Left: Stats -->
+          <div class="stats-section">
+            <div class="stat-item">
+              <span class="stat-value" :class="{ positive: selectedLeague?.my_points > 0, negative: selectedLeague?.my_points < 0 }">
+                {{ selectedLeague?.my_points > 0 ? '+' : '' }}{{ selectedLeague?.my_points }}
+              </span>
+              <span class="stat-label">امتیاز من</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value rank-value">
+                <template v-if="selectedLeague?.qualified">#{{ selectedLeague?.my_rank }}</template>
+                <template v-else>—</template>
+              </span>
+              <span class="stat-label">رتبه من</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value members-value">
+                <span class="members-icon">👥</span>
+                {{ selectedLeague?.member_count }}
+              </span>
+              <span class="stat-label">عضو</span>
+            </div>
+          </div>
+          <!-- Right: League Name -->
+          <div class="league-info-section">
+            <div class="league-badge">
+              <span class="badge-icon">{{ selectedLeague?.is_owner ? '👑' : '🏆' }}</span>
+              <span class="badge-name">{{ selectedLeague?.name }}</span>
+            </div>
+          </div>
         </div>
 
-        <!-- My Stats - Qualified -->
-        <div v-if="selectedLeague?.qualified" class="my-stats-card">
-          <div class="my-stat">
-            <span class="my-stat-value" :class="{ positive: selectedLeague?.my_points > 0, negative: selectedLeague?.my_points < 0 }">
-              {{ selectedLeague?.my_points > 0 ? '+' : '' }}{{ selectedLeague?.my_points }}
+        <!-- Not Qualified Notice (if applicable) -->
+        <div v-if="!selectedLeague?.qualified" class="qualification-notice compact">
+          <span class="notice-emoji">⏳</span>
+          <span class="notice-text">
+            {{ selectedLeague?.matches_needed }} بازی دیگر برای رتبه‌بندی
+          </span>
+        </div>
+
+        <!-- Row 2: Performance Numbers Card -->
+        <div class="performance-numbers-card">
+          <div class="perf-stat">
+            <span class="perf-value win">{{ selectedLeague?.my_wins || 0 }}</span>
+            <span class="perf-label">برد</span>
+          </div>
+          <div class="perf-stat">
+            <span class="perf-value loss">{{ selectedLeague?.my_losses || 0 }}</span>
+            <span class="perf-label">باخت</span>
+          </div>
+          <div class="perf-stat">
+            <span class="perf-value">{{ selectedLeague?.my_matches || 0 }}</span>
+            <span class="perf-label">بازی</span>
+          </div>
+          <div class="perf-stat">
+            <span class="perf-value gd" :class="{ positive: (selectedLeague?.my_goal_difference || 0) > 0, negative: (selectedLeague?.my_goal_difference || 0) < 0 }">
+              {{ (selectedLeague?.my_goal_difference || 0) > 0 ? '+' : '' }}{{ selectedLeague?.my_goal_difference || 0 }}
             </span>
-            <span class="my-stat-label">امتیاز من</span>
-          </div>
-          <div class="stat-divider"></div>
-          <div class="my-stat">
-            <span class="my-stat-value">#{{ selectedLeague?.my_rank || '-' }}</span>
-            <span class="my-stat-label">رتبه من</span>
-          </div>
-        </div>
-        
-        <!-- Not Qualified Notice -->
-        <div v-else class="qualification-notice">
-          <div class="notice-header">
-            <span class="notice-emoji">⏳</span>
-            <span class="notice-title">هنوز در رتبه‌بندی نیستید</span>
-          </div>
-          <p class="notice-desc">
-            برای ورود به جدول رتبه‌بندی، باید حداقل 
-            <strong>{{ selectedLeague?.matches_needed }}</strong> 
-            بازی دیگر انجام دهید.
-          </p>
-          <div class="notice-progress">
-            <span class="progress-label">بازی‌های شما: {{ selectedLeague?.my_matches || 0 }}</span>
+            <span class="perf-label">تفاضل گل</span>
           </div>
         </div>
 
-        <!-- Menu Buttons -->
-        <div class="menu-grid">
-          <button 
-            v-for="item in menuItems" 
-            :key="item.id"
-            class="menu-btn"
-            @click="openView(item.id)"
-          >
-            <span class="menu-icon">{{ item.icon }}</span>
-            <span class="menu-label">{{ item.label }}</span>
+        <!-- Row 3: Performance Chart -->
+        <div class="performance-chart-card">
+          <h3 class="chart-title">عملکرد</h3>
+          <div class="chart-bar">
+            <div 
+              class="bar-segment win" 
+              :style="{ width: getBarWidth('wins') }"
+            >
+              <span v-if="selectedLeague?.my_wins > 0">{{ selectedLeague?.my_wins }}</span>
+            </div>
+            <div 
+              class="bar-segment draw" 
+              :style="{ width: getBarWidth('draws') }"
+            >
+              <span v-if="selectedLeague?.my_draws > 0">{{ selectedLeague?.my_draws }}</span>
+            </div>
+            <div 
+              class="bar-segment loss" 
+              :style="{ width: getBarWidth('losses') }"
+            >
+              <span v-if="selectedLeague?.my_losses > 0">{{ selectedLeague?.my_losses }}</span>
+            </div>
+          </div>
+          <div class="chart-legend">
+            <span class="legend-item"><span class="dot win"></span> برد</span>
+            <span class="legend-item"><span class="dot draw"></span> مساوی</span>
+            <span class="legend-item"><span class="dot loss"></span> باخت</span>
+          </div>
+        </div>
+
+        <!-- Row 4: Menu Buttons -->
+        <div class="menu-grid-new">
+          <button class="menu-btn-new" @click="openView('leaderboard')">
+            <span class="menu-icon-new">🏆</span>
+            <span class="menu-label-new">جدول لیگ</span>
+          </button>
+          <button class="menu-btn-new" @click="openView('members')">
+            <span class="menu-icon-new">👥</span>
+            <span class="menu-label-new">اعضای لیگ</span>
+          </button>
+          <button class="menu-btn-new full-width" @click="openView('add-match')">
+            <span class="menu-label-new">ثبت مسابقه</span>
+          </button>
+          <button class="menu-btn-new" @click="openView('matches')">
+            <span class="menu-icon-new">⚽</span>
+            <span class="menu-label-new">مسابقات اخیر</span>
           </button>
         </div>
 
-        <!-- Share Section -->
-        <div class="share-section">
-          <h3 class="share-title">دعوت از دوستان</h3>
-          
-          <div class="share-code-box">
-            <div class="code-label">کد عضویت:</div>
-            <div class="code-value">{{ selectedLeague?.code }}</div>
-            <button class="copy-btn" @click="copyCode">
-              {{ copySuccess ? '✓' : '📋' }}
-            </button>
-          </div>
-
-          <div class="share-buttons">
-            <button class="share-btn link-btn" @click="copyLink">
-              <span>🔗</span> کپی لینک
-            </button>
-            <button class="share-btn telegram-btn" @click="shareLeague">
-              <span>📤</span> اشتراک‌گذاری
-            </button>
-          </div>
+        <!-- Share Section (collapsed) -->
+        <div class="share-section-compact">
+          <button class="share-toggle" @click="shareLeague">
+            <span>📤</span> دعوت از دوستان
+          </button>
         </div>
       </template>
 
@@ -946,5 +1011,308 @@ watch(isReady, (ready) => {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+}
+
+/* ============ NEW LEAGUE DETAIL DESIGN ============ */
+
+/* Stats & League Info Card */
+.stats-league-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--card-bg);
+  border-radius: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  gap: 12px;
+}
+
+.stats-section {
+  display: flex;
+  gap: 16px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.stat-value.positive {
+  color: var(--success);
+}
+
+.stat-value.negative {
+  color: var(--error);
+}
+
+.stat-value.rank-value {
+  color: var(--primary);
+}
+
+.stat-value.members-value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 18px;
+}
+
+.members-icon {
+  font-size: 14px;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.league-info-section {
+  display: flex;
+  align-items: center;
+}
+
+.league-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
+.badge-icon {
+  font-size: 24px;
+}
+
+.badge-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--warning);
+}
+
+/* Compact Qualification Notice */
+.qualification-notice.compact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 10px;
+  text-align: center;
+}
+
+.qualification-notice.compact .notice-emoji {
+  font-size: 16px;
+}
+
+.qualification-notice.compact .notice-text {
+  font-size: 13px;
+  color: var(--warning);
+}
+
+/* Performance Numbers Card */
+.performance-numbers-card {
+  display: flex;
+  justify-content: space-around;
+  background: var(--card-bg);
+  border-radius: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+}
+
+.perf-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.perf-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.perf-value.win {
+  color: var(--success);
+}
+
+.perf-value.loss {
+  color: var(--error);
+}
+
+.perf-value.gd.positive {
+  color: var(--success);
+}
+
+.perf-value.gd.negative {
+  color: var(--error);
+}
+
+.perf-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Performance Chart Card */
+.performance-chart-card {
+  background: var(--card-bg);
+  border-radius: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+}
+
+.chart-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.chart-bar {
+  display: flex;
+  height: 40px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.bar-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: white;
+  min-width: 0;
+  transition: width 0.5s ease;
+}
+
+.bar-segment.win {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.bar-segment.draw {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.bar-segment.loss {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+.chart-legend {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 12px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dot.win {
+  background: #10b981;
+}
+
+.dot.draw {
+  background: #f59e0b;
+}
+
+.dot.loss {
+  background: #ef4444;
+}
+
+/* New Menu Grid */
+.menu-grid-new {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.menu-btn-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: transparent;
+  border: 2px solid var(--primary);
+  padding: 14px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.menu-btn-new:hover {
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.menu-btn-new:active {
+  transform: scale(0.98);
+}
+
+.menu-btn-new.full-width {
+  grid-column: span 2;
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
+  border: none;
+  color: white;
+}
+
+.menu-icon-new {
+  font-size: 18px;
+}
+
+.menu-label-new {
+  font-size: 14px;
+}
+
+/* Share Section Compact */
+.share-section-compact {
+  display: flex;
+  justify-content: center;
+}
+
+.share-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  padding: 12px 24px;
+  border-radius: 12px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.share-toggle:hover {
+  border-color: var(--primary);
+  color: var(--text-primary);
 }
 </style>

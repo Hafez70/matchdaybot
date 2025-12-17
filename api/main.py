@@ -144,6 +144,10 @@ class UserLeague(BaseModel):
     my_points: int
     my_rank: Optional[int]  # None if not qualified
     my_matches: int
+    my_wins: int
+    my_losses: int
+    my_draws: int
+    my_goal_difference: int
     qualified: bool  # Whether user meets 20% threshold
     matches_needed: int  # How many more matches needed (0 if qualified)
 
@@ -203,14 +207,24 @@ async def get_my_leagues(user: TelegramUser = Depends(get_current_user)):
                     COALESCE(SUM(CASE 
                         WHEN (mp.team_number = 1 AND m.team1_score < m.team2_score) OR
                              (mp.team_number = 2 AND m.team2_score < m.team1_score)
-                        THEN 1 ELSE 0 END), 0) as losses
+                        THEN 1 ELSE 0 END), 0) as losses,
+                    COALESCE(SUM(CASE 
+                        WHEN m.team1_score = m.team2_score 
+                        THEN 1 ELSE 0 END), 0) as draws,
+                    COALESCE(SUM(CASE 
+                        WHEN mp.team_number = 1 THEN m.team1_score - m.team2_score
+                        ELSE m.team2_score - m.team1_score END), 0) as goal_difference
                 FROM match_players mp
                 JOIN matches m ON mp.match_id = m.id AND m.league_code = ?
                 WHERE mp.telegram_id = ?
             """, (row['code'], user.id))
             stats = cursor.fetchone()
             my_matches = stats['matches'] or 0
-            my_points = (stats['wins'] or 0) - (stats['losses'] or 0)
+            my_wins = stats['wins'] or 0
+            my_losses = stats['losses'] or 0
+            my_draws = stats['draws'] or 0
+            my_goal_difference = stats['goal_difference'] or 0
+            my_points = my_wins - my_losses
             
             # Get max matches in league (for 20% threshold)
             cursor.execute("""
@@ -263,6 +277,10 @@ async def get_my_leagues(user: TelegramUser = Depends(get_current_user)):
                 "my_points": my_points,
                 "my_rank": my_rank,
                 "my_matches": my_matches,
+                "my_wins": my_wins,
+                "my_losses": my_losses,
+                "my_draws": my_draws,
+                "my_goal_difference": my_goal_difference,
                 "qualified": qualified,
                 "matches_needed": matches_needed
             })
