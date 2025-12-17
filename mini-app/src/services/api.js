@@ -17,6 +17,8 @@ let telegramInitData = null
 export function setTelegramInitData(initData) {
   telegramInitData = initData
   console.log('🔐 Auth: Telegram init data set')
+  console.log('🔐 Auth: initData length:', initData?.length || 0)
+  console.log('🔐 Auth: initData preview:', initData?.substring(0, 100) || 'null')
 }
 
 /**
@@ -38,10 +40,14 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`)
+    console.log(`🔑 telegramInitData available: ${!!telegramInitData}`)
     
     // Add Telegram auth header if available
     if (telegramInitData) {
       config.headers.Authorization = `tma ${telegramInitData}`
+      console.log(`🔑 Authorization header set: tma ${telegramInitData.substring(0, 50)}...`)
+    } else {
+      console.warn(`⚠️ No telegramInitData available for auth!`)
     }
     
     return config
