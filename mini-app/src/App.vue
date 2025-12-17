@@ -7,29 +7,36 @@ import MatchesView from './components/MatchesView.vue'
 import MembersView from './components/MembersView.vue'
 import PlayerStatsView from './components/PlayerStatsView.vue'
 
-const { isReady, userName, userId, hapticFeedback, isTelegram, initDataRaw, openTelegramBot } = useTelegram()
+const { isReady, userName, userId, hapticFeedback, isTelegram, initDataRaw, openTelegramBot, shareUrl } = useTelegram()
 
 // App state
-const currentView = ref('home') // 'home' | 'leaderboard' | 'members' | 'stats' | 'matches'
+const currentView = ref('leagues') // 'leagues' | 'detail' | 'leaderboard' | 'members' | 'stats' | 'matches'
 const selectedLeague = ref(null)
 const leagues = ref([])
 const loading = ref(true)
 const error = ref(null)
 const notInTelegram = ref(false)
 const realUserName = ref(null)
+const copySuccess = ref(false)
 
-// Bot username for redirect link
+// Bot username for links
 const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME || 'frontAssistantbot'
 
 // Display name
 const displayName = computed(() => realUserName.value || userName.value || 'کاربر')
 
-// Menu items (like bot buttons)
+// Join link for selected league
+const joinLink = computed(() => {
+  if (!selectedLeague.value) return ''
+  return `https://t.me/${BOT_USERNAME}?start=join_${selectedLeague.value.code}`
+})
+
+// Menu items for league detail
 const menuItems = [
+  { id: 'leaderboard', icon: '🏅', label: 'جدول لیگ' },
   { id: 'members', icon: '👥', label: 'اعضای لیگ' },
   { id: 'stats', icon: '📊', label: 'آمار من' },
-  { id: 'leaderboard', icon: '🏅', label: 'جدول لیگ' },
-  { id: 'matches', icon: '🐂', label: 'مسابقات اخیر' }
+  { id: 'matches', icon: '⚽', label: 'مسابقات اخیر' }
 ]
 
 const fetchUserInfo = async () => {
@@ -68,11 +75,6 @@ const fetchLeagues = async () => {
     } else {
       leagues.value = await api.getUserLeagues(userId.value)
     }
-    
-    // Auto-select first league if only one
-    if (leagues.value.length === 1) {
-      selectedLeague.value = leagues.value[0]
-    }
   } catch (err) {
     if (err.response?.status === 401) {
       error.value = 'احراز هویت ناموفق. لطفاً دوباره از تلگرام وارد شوید.'
@@ -87,23 +89,25 @@ const fetchLeagues = async () => {
   }
 }
 
-const onLeagueChange = () => {
+const selectLeague = (league) => {
   hapticFeedback('light')
-  currentView.value = 'home'
+  selectedLeague.value = league
+  currentView.value = 'detail'
 }
 
 const openView = (viewId) => {
-  if (!selectedLeague.value) {
-    hapticFeedback('error')
-    return
-  }
   hapticFeedback('light')
   currentView.value = viewId
 }
 
 const goBack = () => {
   hapticFeedback('light')
-  currentView.value = 'home'
+  if (currentView.value === 'detail') {
+    currentView.value = 'leagues'
+    selectedLeague.value = null
+  } else {
+    currentView.value = 'detail'
+  }
 }
 
 const goToTelegram = () => {
@@ -112,6 +116,35 @@ const goToTelegram = () => {
 
 const retry = () => {
   fetchLeagues()
+}
+
+const copyCode = async () => {
+  if (!selectedLeague.value) return
+  try {
+    await navigator.clipboard.writeText(selectedLeague.value.code)
+    hapticFeedback('success')
+    copySuccess.value = true
+    setTimeout(() => copySuccess.value = false, 2000)
+  } catch (err) {
+    console.error('Copy failed:', err)
+  }
+}
+
+const copyLink = async () => {
+  try {
+    await navigator.clipboard.writeText(joinLink.value)
+    hapticFeedback('success')
+    copySuccess.value = true
+    setTimeout(() => copySuccess.value = false, 2000)
+  } catch (err) {
+    console.error('Copy failed:', err)
+  }
+}
+
+const shareLeague = () => {
+  hapticFeedback('light')
+  const text = `🏆 به لیگ "${selectedLeague.value.name}" بپیوندید!\n\nکد عضویت: ${selectedLeague.value.code}`
+  shareUrl(joinLink.value, text)
 }
 
 onMounted(() => {
@@ -129,10 +162,10 @@ watch(isReady, (ready) => {
 
 <template>
   <div class="app">
-    <!-- Header - Always visible -->
+    <!-- Header -->
     <header class="app-header">
       <div class="header-left">
-        <button v-if="currentView !== 'home'" class="back-btn" @click="goBack">
+        <button v-if="currentView !== 'leagues'" class="back-btn" @click="goBack">
           ←
         </button>
         <div v-else class="logo">🎮</div>
@@ -188,52 +221,68 @@ watch(isReady, (ready) => {
 
     <!-- Main Content -->
     <main v-else class="main-content">
-      <!-- Home View -->
-      <template v-if="currentView === 'home'">
-        <!-- League Selector Dropdown -->
-        <div class="league-selector-section">
-          <label class="selector-label">انتخاب لیگ:</label>
-          <div class="select-wrapper">
-            <select 
-              v-model="selectedLeague" 
-              class="league-select"
-              @change="onLeagueChange"
-            >
-              <option :value="null" disabled>یک لیگ انتخاب کنید...</option>
-              <option v-for="league in leagues" :key="league.code" :value="league">
-                {{ league.is_owner ? '👑' : '🏆' }} {{ league.name }}
-              </option>
-            </select>
-            <span class="select-arrow">▼</span>
+      <!-- Leagues List View -->
+      <template v-if="currentView === 'leagues'">
+        <div class="section-header">
+          <h2 class="section-title">لیگ‌های من</h2>
+          <span class="league-count">{{ leagues.length }} لیگ</span>
+        </div>
+        
+        <div class="leagues-list">
+          <div 
+            v-for="league in leagues" 
+            :key="league.code"
+            class="league-card"
+            @click="selectLeague(league)"
+          >
+            <div class="league-card-header">
+              <span class="league-icon">{{ league.is_owner ? '👑' : '🏆' }}</span>
+              <span class="league-name">{{ league.name }}</span>
+              <span class="league-members">{{ league.member_count }} 👥</span>
+            </div>
+            <div class="league-card-divider"></div>
+            <div class="league-card-stats">
+              <div class="card-stat">
+                <span class="card-stat-label">امتیاز</span>
+                <span class="card-stat-value" :class="{ positive: league.my_points > 0, negative: league.my_points < 0 }">
+                  {{ league.my_points > 0 ? '+' : '' }}{{ league.my_points }}
+                </span>
+              </div>
+              <div class="card-stat">
+                <span class="card-stat-label">رتبه</span>
+                <span class="card-stat-value rank">#{{ league.my_rank || '-' }}</span>
+              </div>
+            </div>
+            <div class="card-arrow">←</div>
           </div>
         </div>
+      </template>
 
-        <!-- League Info -->
-        <div v-if="selectedLeague" class="league-info-card">
-          <div class="league-info-header">
-            <span class="league-emoji">🏆</span>
-            <div class="league-details">
-              <h2 class="league-name">{{ selectedLeague.name }}</h2>
-              <p class="league-meta">{{ selectedLeague.member_count }} عضو</p>
-            </div>
+      <!-- League Detail View -->
+      <template v-else-if="currentView === 'detail'">
+        <div class="detail-header">
+          <div class="detail-icon">{{ selectedLeague?.is_owner ? '👑' : '🏆' }}</div>
+          <h2 class="detail-title">{{ selectedLeague?.name }}</h2>
+          <p class="detail-meta">{{ selectedLeague?.member_count }} عضو</p>
+        </div>
+
+        <!-- My Stats -->
+        <div class="my-stats-card">
+          <div class="my-stat">
+            <span class="my-stat-value" :class="{ positive: selectedLeague?.my_points > 0, negative: selectedLeague?.my_points < 0 }">
+              {{ selectedLeague?.my_points > 0 ? '+' : '' }}{{ selectedLeague?.my_points }}
+            </span>
+            <span class="my-stat-label">امتیاز من</span>
           </div>
-          <div class="league-stats">
-            <div class="stat-item">
-              <span class="stat-value" :class="{ positive: selectedLeague.my_points > 0, negative: selectedLeague.my_points < 0 }">
-                {{ selectedLeague.my_points > 0 ? '+' : '' }}{{ selectedLeague.my_points }}
-              </span>
-              <span class="stat-label">امتیاز شما</span>
-            </div>
-            <div class="stat-divider"></div>
-            <div class="stat-item">
-              <span class="stat-value">#{{ selectedLeague.my_rank }}</span>
-              <span class="stat-label">رتبه شما</span>
-            </div>
+          <div class="stat-divider"></div>
+          <div class="my-stat">
+            <span class="my-stat-value">#{{ selectedLeague?.my_rank || '-' }}</span>
+            <span class="my-stat-label">رتبه من</span>
           </div>
         </div>
 
         <!-- Menu Buttons -->
-        <div v-if="selectedLeague" class="menu-grid">
+        <div class="menu-grid">
           <button 
             v-for="item in menuItems" 
             :key="item.id"
@@ -245,14 +294,30 @@ watch(isReady, (ready) => {
           </button>
         </div>
 
-        <!-- Placeholder when no league selected -->
-        <div v-if="!selectedLeague" class="select-prompt">
-          <div class="prompt-icon">👆</div>
-          <p>لطفاً یک لیگ انتخاب کنید</p>
+        <!-- Share Section -->
+        <div class="share-section">
+          <h3 class="share-title">دعوت از دوستان</h3>
+          
+          <div class="share-code-box">
+            <div class="code-label">کد عضویت:</div>
+            <div class="code-value">{{ selectedLeague?.code }}</div>
+            <button class="copy-btn" @click="copyCode">
+              {{ copySuccess ? '✓' : '📋' }}
+            </button>
+          </div>
+
+          <div class="share-buttons">
+            <button class="share-btn link-btn" @click="copyLink">
+              <span>🔗</span> کپی لینک
+            </button>
+            <button class="share-btn telegram-btn" @click="shareLeague">
+              <span>📤</span> اشتراک‌گذاری
+            </button>
+          </div>
         </div>
       </template>
 
-      <!-- Detail Views -->
+      <!-- Detail Sub-Views -->
       <template v-else>
         <div class="view-header">
           <h2 class="view-title">
@@ -280,6 +345,11 @@ watch(isReady, (ready) => {
         />
       </template>
     </main>
+
+    <!-- Copy Toast -->
+    <div v-if="copySuccess" class="toast">
+      ✓ کپی شد!
+    </div>
   </div>
 </template>
 
@@ -421,127 +491,191 @@ watch(isReady, (ready) => {
   gap: 16px;
 }
 
-/* League Selector */
-.league-selector-section {
+/* Section Header */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.league-count {
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+
+/* Leagues List */
+.leagues-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
-.selector-label {
-  font-size: 14px;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.select-wrapper {
+.league-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
   position: relative;
 }
 
-.league-select {
-  width: 100%;
-  padding: 14px 16px;
-  padding-right: 40px;
-  background: var(--card-bg);
-  border: 2px solid var(--border);
-  border-radius: 12px;
-  color: var(--text-primary);
-  font-size: 16px;
-  font-family: inherit;
-  appearance: none;
-  cursor: pointer;
-  transition: border-color 0.2s;
-}
-
-.league-select:focus {
-  outline: none;
+.league-card:hover {
   border-color: var(--primary);
+  transform: translateX(-4px);
 }
 
-.select-arrow {
+.league-card:active {
+  transform: scale(0.98);
+}
+
+.league-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.league-icon {
+  font-size: 24px;
+}
+
+.league-name {
+  flex: 1;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.league-members {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.league-card-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 12px 0;
+}
+
+.league-card-stats {
+  display: flex;
+  gap: 24px;
+}
+
+.card-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-stat-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.card-stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.card-stat-value.positive {
+  color: var(--success);
+}
+
+.card-stat-value.negative {
+  color: var(--error);
+}
+
+.card-stat-value.rank {
+  color: var(--primary);
+}
+
+.card-arrow {
   position: absolute;
-  left: 14px;
+  left: 16px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--text-secondary);
-  pointer-events: none;
-  font-size: 12px;
+  font-size: 18px;
+  color: var(--text-muted);
 }
 
-/* League Info Card */
-.league-info-card {
+/* Detail Header */
+.detail-header {
+  text-align: center;
+  padding: 16px 0;
+}
+
+.detail-icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.detail-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+  color: var(--text-primary);
+}
+
+.detail-meta {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* My Stats Card */
+.my-stats-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
   background: var(--card-bg);
   border-radius: 16px;
   padding: 20px;
   border: 1px solid var(--border);
 }
 
-.league-info-header {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 16px;
-}
-
-.league-emoji {
-  font-size: 40px;
-}
-
-.league-details {
-  flex: 1;
-}
-
-.league-name {
-  font-size: 20px;
-  font-weight: 600;
-  margin: 0 0 4px 0;
-  color: var(--text-primary);
-}
-
-.league-meta {
-  color: var(--text-secondary);
-  font-size: 14px;
-  margin: 0;
-}
-
-.league-stats {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 30px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-}
-
-.stat-item {
+.my-stat {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
 }
 
-.stat-value {
-  font-size: 24px;
+.my-stat-value {
+  font-size: 28px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
-.stat-value.positive {
+.my-stat-value.positive {
   color: var(--success);
 }
 
-.stat-value.negative {
+.my-stat-value.negative {
   color: var(--error);
 }
 
-.stat-label {
-  font-size: 12px;
+.my-stat-label {
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
 .stat-divider {
   width: 1px;
-  height: 40px;
+  height: 50px;
   background: var(--border);
 }
 
@@ -585,25 +719,92 @@ watch(isReady, (ready) => {
   text-align: right;
 }
 
-/* Select prompt */
-.select-prompt {
-  flex: 1;
+/* Share Section */
+.share-section {
+  background: var(--card-bg);
+  border-radius: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+}
+
+.share-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  color: var(--text-primary);
+}
+
+.share-code-box {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
+  gap: 10px;
+  background: var(--bg-secondary);
+  padding: 12px 14px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.code-label {
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
-.prompt-icon {
-  font-size: 48px;
-  animation: bounce 2s infinite;
+.code-value {
+  flex: 1;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: monospace;
+  color: var(--primary);
+  letter-spacing: 2px;
 }
 
-@keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+.copy-btn {
+  background: var(--primary);
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.share-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.share-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.link-btn {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.telegram-btn {
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
+  color: white;
+}
+
+.share-btn:active {
+  transform: scale(0.98);
 }
 
 /* View header */
@@ -622,5 +823,32 @@ watch(isReady, (ready) => {
   font-size: 14px;
   color: var(--text-secondary);
   margin: 0;
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--success);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  animation: slideUp 0.3s ease;
+  z-index: 1000;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 </style>

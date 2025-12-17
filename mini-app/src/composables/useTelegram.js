@@ -184,6 +184,20 @@ export function useTelegram() {
     window.location.href = `https://t.me/${botUsername}`
   }
 
+  /**
+   * Share URL via Telegram
+   */
+  function shareUrl(url, text = '') {
+    if (webApp.value?.openTelegramLink) {
+      const shareLink = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`
+      webApp.value.openTelegramLink(shareLink)
+    } else {
+      // Fallback for non-Telegram environment
+      const shareLink = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`
+      window.open(shareLink, '_blank')
+    }
+  }
+
   return {
     webApp,
     user,
@@ -203,7 +217,8 @@ export function useTelegram() {
     close,
     showAlert,
     hapticFeedback,
-    openTelegramBot
+    openTelegramBot,
+    shareUrl
   }
 }
 
