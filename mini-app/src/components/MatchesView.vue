@@ -103,8 +103,11 @@ const getAnimationDelay = (index) => {
       >
         <!-- Match Header -->
         <div class="match-header">
+          <div class="match-meta">
+            <span class="match-date">{{ formatDate(match.created_at) }}</span>
+            <span class="result-emoji">{{ getResultEmoji(match) }}</span>
+          </div>
           <span class="match-type">{{ match.match_type }}</span>
-          <span class="match-date">{{ formatDate(match.created_at) }}</span>
         </div>
 
         <!-- Teams and Score -->
@@ -139,10 +142,6 @@ const getAnimationDelay = (index) => {
           </div>
         </div>
 
-        <!-- Result Indicator -->
-        <div class="match-result-indicator">
-          {{ getResultEmoji(match) }}
-        </div>
       </div>
     </div>
   </div>
@@ -165,9 +164,19 @@ const getAnimationDelay = (index) => {
   margin-bottom: 16px;
 }
 
+.match-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .match-date {
   font-size: 0.75rem;
   color: var(--text-muted);
+}
+
+.result-emoji {
+  font-size: 1rem;
 }
 
 .match-teams {
@@ -242,12 +251,13 @@ const getAnimationDelay = (index) => {
   font-weight: 400;
 }
 
-.match-result-indicator {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  font-size: 1.25rem;
-  opacity: 0.8;
+.match-type {
+  font-size: 0.75rem;
+  color: var(--primary);
+  background: rgba(139, 92, 246, 0.15);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: 600;
 }
 </style>
 
