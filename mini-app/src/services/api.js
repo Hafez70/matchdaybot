@@ -152,6 +152,23 @@ export const api = {
   async getPlayerStats(leagueCode, telegramId) {
     const response = await apiClient.get(`/api/league/${leagueCode}/player/${telegramId}`)
     return response.data
+  },
+
+  /**
+   * Create matches in a league
+   * @param {string} leagueCode - League code
+   * @param {number[]} team1 - Array of telegram IDs for team 1
+   * @param {number[]} team2 - Array of telegram IDs for team 2
+   * @param {Array<{team1_score: number, team2_score: number}>} results - Match results
+   */
+  async createMatches(leagueCode, team1, team2, results) {
+    const response = await apiClient.post('/api/matches', {
+      league_code: leagueCode,
+      team1,
+      team2,
+      results
+    })
+    return response.data
   }
 }
 

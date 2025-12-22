@@ -136,6 +136,28 @@ class UserInfo(BaseModel):
     created_at: str
 
 
+class MatchResult(BaseModel):
+    """Single match result"""
+    team1_score: int
+    team2_score: int
+
+
+class CreateMatchesRequest(BaseModel):
+    """Request to create one or more matches"""
+    league_code: str
+    team1: list[int]  # List of telegram IDs for team 1
+    team2: list[int]  # List of telegram IDs for team 2
+    results: list[MatchResult]  # List of match results
+
+
+class CreateMatchesResponse(BaseModel):
+    """Response after creating matches"""
+    success: bool
+    message: str
+    match_ids: list[int]
+    matches_created: int
+
+
 class UserLeague(BaseModel):
     code: str
     name: str
@@ -704,6 +726,124 @@ async def get_player_stats(league_code: str, telegram_id: int):
             losses=stats['losses'],
             draws=stats['draws'],
             goal_difference=stats['goal_difference']
+        )
+
+
+# ============ Match Creation API ============
+
+@app.post("/api/matches", response_model=CreateMatchesResponse)
+async def create_matches(
+    request: CreateMatchesRequest,
+    user: TelegramUser = Depends(get_current_user)
+):
+    """
+    Create one or more matches in a league.
+    
+    - User must be authenticated via Telegram
+    - User must be a member of the league
+    - All players in team1 and team2 must be members of the league
+    - At least one result is required
+    - Each team must have 1-2 players
+    """
+    logger.info(f"📥 create_matches called by user {user.id} for league {request.league_code}")
+    
+    # Validate request
+    if not request.results:
+        raise HTTPException(status_code=400, detail="حداقل یک نتیجه باید وارد شود")
+    
+    if len(request.team1) < 1 or len(request.team1) > 2:
+        raise HTTPException(status_code=400, detail="تیم ۱ باید ۱ یا ۲ بازیکن داشته باشد")
+    
+    if len(request.team2) < 1 or len(request.team2) > 2:
+        raise HTTPException(status_code=400, detail="تیم ۲ باید ۱ یا ۲ بازیکن داشته باشد")
+    
+    # Check for duplicate players
+    all_players = set(request.team1 + request.team2)
+    if len(all_players) != len(request.team1) + len(request.team2):
+        raise HTTPException(status_code=400, detail="یک بازیکن نمی‌تواند در هر دو تیم باشد")
+    
+    # Validate scores
+    for i, result in enumerate(request.results):
+        if result.team1_score < 0 or result.team2_score < 0:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"نتیجه {i+1}: امتیاز نمی‌تواند منفی باشد"
+            )
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        # Check league exists
+        cursor.execute("SELECT code, name FROM leagues WHERE code = ?", (request.league_code,))
+        league = cursor.fetchone()
+        if not league:
+            raise HTTPException(status_code=404, detail="لیگ پیدا نشد")
+        
+        # Check user is a member of the league
+        cursor.execute(
+            "SELECT 1 FROM league_members WHERE league_code = ? AND telegram_id = ?",
+            (request.league_code, user.id)
+        )
+        if not cursor.fetchone():
+            raise HTTPException(status_code=403, detail="شما عضو این لیگ نیستید")
+        
+        # Get all league members
+        cursor.execute(
+            "SELECT telegram_id FROM league_members WHERE league_code = ?",
+            (request.league_code,)
+        )
+        league_members = {row['telegram_id'] for row in cursor.fetchall()}
+        
+        # Validate all players are in the league
+        for player_id in all_players:
+            if player_id not in league_members:
+                # Get player name if exists
+                cursor.execute("SELECT name FROM users WHERE telegram_id = ?", (player_id,))
+                player = cursor.fetchone()
+                player_name = player['name'] if player else str(player_id)
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"بازیکن {player_name} عضو این لیگ نیست"
+                )
+        
+        # Determine match type
+        match_type = f"{len(request.team1)}v{len(request.team2)}"
+        
+        # Create matches
+        match_ids = []
+        for result in request.results:
+            # Insert match
+            cursor.execute("""
+                INSERT INTO matches (league_code, match_type, team1_score, team2_score)
+                VALUES (?, ?, ?, ?)
+            """, (request.league_code, match_type, result.team1_score, result.team2_score))
+            
+            match_id = cursor.lastrowid
+            match_ids.append(match_id)
+            
+            # Add team 1 players
+            for telegram_id in request.team1:
+                cursor.execute(
+                    "INSERT INTO match_players (match_id, telegram_id, team_number) VALUES (?, ?, ?)",
+                    (match_id, telegram_id, 1)
+                )
+            
+            # Add team 2 players
+            for telegram_id in request.team2:
+                cursor.execute(
+                    "INSERT INTO match_players (match_id, telegram_id, team_number) VALUES (?, ?, ?)",
+                    (match_id, telegram_id, 2)
+                )
+        
+        conn.commit()
+        
+        logger.info(f"✅ Created {len(match_ids)} matches: {match_ids}")
+        
+        return CreateMatchesResponse(
+            success=True,
+            message=f"{len(match_ids)} مسابقه با موفقیت ثبت شد",
+            match_ids=match_ids,
+            matches_created=len(match_ids)
         )
 
 

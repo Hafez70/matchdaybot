@@ -6,6 +6,7 @@ import LeaderboardView from './components/LeaderboardView.vue'
 import MatchesView from './components/MatchesView.vue'
 import MembersView from './components/MembersView.vue'
 import PlayerStatsView from './components/PlayerStatsView.vue'
+import AddMatchView from './components/AddMatchView.vue'
 
 const { isReady, userName, userId, hapticFeedback, isTelegram, initDataRaw, openTelegramBot, shareUrl } = useTelegram()
 
@@ -24,6 +25,9 @@ const copySuccess = ref(false)
 // Computed: not in telegram (only in production)
 const notInTelegram = computed(() => isReady.value && !isTelegram.value && !isDevMode)
 
+// Match creation success
+const matchSuccessMessage = ref(null)
+
 // Bot username for links
 const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME || 'frontAssistantbot'
 
@@ -41,7 +45,8 @@ const menuItems = [
   { id: 'leaderboard', icon: '🏅', label: 'جدول لیگ' },
   { id: 'members', icon: '👥', label: 'اعضای لیگ' },
   { id: 'stats', icon: '📊', label: 'آمار من' },
-  { id: 'matches', icon: '⚽', label: 'مسابقات اخیر' }
+  { id: 'matches', icon: '⚽', label: 'مسابقات اخیر' },
+  { id: 'add-match', icon: '📝', label: 'ثبت مسابقه' }
 ]
 
 const fetchUserInfo = async () => {
@@ -148,6 +153,15 @@ const shareLeague = () => {
   hapticFeedback('light')
   const text = `🏆 به لیگ "${selectedLeague.value.name}" بپیوندید!\n\nکد عضویت: ${selectedLeague.value.code}`
   shareUrl(joinLink.value, text)
+}
+
+const onMatchSuccess = (response) => {
+  hapticFeedback('success')
+  matchSuccessMessage.value = response.message
+  setTimeout(() => matchSuccessMessage.value = null, 3000)
+  // Go back to detail view and refresh leagues
+  currentView.value = 'detail'
+  fetchLeagues()
 }
 
 // Calculate bar width for performance chart
@@ -469,12 +483,23 @@ watch(isReady, (ready) => {
           v-if="currentView === 'matches'" 
           :league-code="selectedLeague?.code" 
         />
+        <AddMatchView 
+          v-if="currentView === 'add-match'" 
+          :league-code="selectedLeague?.code"
+          @success="onMatchSuccess"
+          @back="currentView = 'detail'"
+        />
       </template>
     </main>
 
     <!-- Copy Toast -->
     <div v-if="copySuccess" class="toast">
       ✓ کپی شد!
+    </div>
+
+    <!-- Match Success Toast -->
+    <div v-if="matchSuccessMessage" class="toast success-toast">
+      ✅ {{ matchSuccessMessage }}
     </div>
   </div>
 </template>
@@ -1366,5 +1391,10 @@ watch(isReady, (ready) => {
 
 .menu-label-new {
   font-size: 14px;
+}
+
+/* Success Toast */
+.success-toast {
+  background: linear-gradient(135deg, #10b981, #059669);
 }
 </style>
