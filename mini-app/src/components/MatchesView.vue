@@ -104,7 +104,12 @@ watch(() => props.leagueCode, () => fetchMatches(true))
 // Format date in Tehran timezone (UTC+3:30)
 const formatDate = (dateStr) => {
   try {
-    const date = new Date(dateStr)
+    // Treat dateStr as UTC by appending 'Z' if no timezone specified
+    let utcStr = dateStr
+    if (!dateStr.includes('Z') && !dateStr.includes('+')) {
+      utcStr = dateStr.replace(' ', 'T') + 'Z'
+    }
+    const date = new Date(utcStr)
     return new Intl.DateTimeFormat('fa-IR', {
       timeZone: 'Asia/Tehran',
       month: 'short',
