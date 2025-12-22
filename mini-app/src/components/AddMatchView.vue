@@ -34,17 +34,18 @@ const editingIndex = ref(null)
 const deleteConfirmIndex = ref(null)
 
 // Computed
-const team1Names = computed(() => {
+const team1Players = computed(() => {
   return team1Selected.value
     .map(id => members.value.find(m => m.telegram_id === id)?.name || '')
-    .join(' و ')
 })
 
-const team2Names = computed(() => {
+const team2Players = computed(() => {
   return team2Selected.value
     .map(id => members.value.find(m => m.telegram_id === id)?.name || '')
-    .join(' و ')
 })
+
+const team1Names = computed(() => team1Players.value.join(' و '))
+const team2Names = computed(() => team2Players.value.join(' و '))
 
 const availableForTeam1 = computed(() => members.value)
 
@@ -215,6 +216,24 @@ const getResultEmoji = (result) => {
   return '🤝'
 }
 
+const getInputScoreClass = (team) => {
+  const s1 = parseInt(currentResult.value.team1_score)
+  const s2 = parseInt(currentResult.value.team2_score)
+  if (isNaN(s1) || isNaN(s2)) return ''
+  if (s1 === s2) return 'draw'
+  if (team === 1) return s1 > s2 ? 'winner' : 'loser'
+  return s2 > s1 ? 'winner' : 'loser'
+}
+
+const getCurrentResultEmoji = computed(() => {
+  const s1 = parseInt(currentResult.value.team1_score)
+  const s2 = parseInt(currentResult.value.team2_score)
+  if (isNaN(s1) || isNaN(s2)) return ''
+  if (s1 > s2) return '🏆'
+  if (s1 < s2) return '❌'
+  return '🤝'
+})
+
 onMounted(() => {
   fetchMembers()
 })
@@ -373,49 +392,72 @@ onMounted(() => {
         </div>
 
         <!-- Current Input Card -->
-        <div class="result-card input-card" :class="{ editing: editingIndex !== null }">
-          <div class="input-card-header" v-if="editingIndex !== null">
-            <span>✏️ ویرایش نتیجه {{ editingIndex + 1 }}</span>
-            <button class="cancel-edit-btn" @click="cancelEdit">انصراف</button>
+        <div class="match-card input-card" :class="{ editing: editingIndex !== null }">
+          <!-- Match Header -->
+          <div class="match-header">
+            <div class="match-meta">
+              <span v-if="editingIndex !== null" class="edit-badge">✏️ ویرایش نتیجه {{ editingIndex + 1 }}</span>
+              <span v-else class="new-badge">➕ نتیجه جدید</span>
+              <span v-if="getCurrentResultEmoji" class="result-emoji">{{ getCurrentResultEmoji }}</span>
+            </div>
+            <button v-if="editingIndex !== null" class="cancel-edit-btn" @click="cancelEdit">انصراف</button>
           </div>
-          <div class="input-card-header" v-else>
-            <span>➕ نتیجه جدید</span>
-          </div>
-          
-          <div class="result-input-content">
-            <div class="input-team">
-              <span class="input-team-name">{{ team1Names }}</span>
+
+          <!-- Teams and Score -->
+          <div class="match-teams">
+            <!-- Team 1 -->
+            <div class="team team-1">
+              <div class="team-players">
+                <div v-for="player in team1Players" :key="player" class="player">
+                  {{ player }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Score Input -->
+            <div class="match-score-input">
               <input 
                 type="number" 
                 v-model="currentResult.team1_score"
                 min="0"
                 placeholder="0"
                 class="score-input"
+                :class="getInputScoreClass(1)"
                 inputmode="numeric"
               />
-            </div>
-            <div class="input-separator">-</div>
-            <div class="input-team">
+              <span class="score-separator">-</span>
               <input 
                 type="number" 
                 v-model="currentResult.team2_score"
                 min="0"
                 placeholder="0"
                 class="score-input"
+                :class="getInputScoreClass(2)"
                 inputmode="numeric"
               />
-              <span class="input-team-name">{{ team2Names }}</span>
+            </div>
+
+            <!-- Team 2 -->
+            <div class="team team-2">
+              <div class="team-players">
+                <div v-for="player in team2Players" :key="player" class="player">
+                  {{ player }}
+                </div>
+              </div>
             </div>
           </div>
-          
-          <button 
-            class="add-result-btn"
-            :class="{ disabled: !canSubmitCurrent }"
-            :disabled="!canSubmitCurrent"
-            @click="addResultToList"
-          >
-            {{ editingIndex !== null ? '✓ ذخیره تغییرات' : '➕ افزودن به لیست' }}
-          </button>
+
+          <!-- Action Button -->
+          <div class="match-actions">
+            <button 
+              class="action-btn add-btn"
+              :class="{ disabled: !canSubmitCurrent }"
+              :disabled="!canSubmitCurrent"
+              @click="addResultToList"
+            >
+              {{ editingIndex !== null ? '✓ ذخیره تغییرات' : '➕ افزودن به لیست' }}
+            </button>
+          </div>
         </div>
 
         <!-- Empty state hint -->
@@ -722,15 +764,124 @@ onMounted(() => {
   border-color: rgba(16, 185, 129, 0.3);
 }
 
-.result-card.input-card {
-  border-color: var(--primary);
-  border-width: 2px;
-  border-style: dashed;
+/* Match Card (input card matching MatchesView style) */
+.match-card {
+  position: relative;
+  overflow: hidden;
+  background: var(--card-bg);
+  border: 2px dashed var(--primary);
+  border-radius: var(--radius-lg, 14px);
+  padding: 16px;
+  margin-bottom: 12px;
 }
 
-.result-card.input-card.editing {
+.match-card.editing {
   border-color: #f59e0b;
   background: rgba(245, 158, 11, 0.05);
+}
+
+.match-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.match-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.new-badge {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--primary);
+}
+
+.edit-badge {
+  font-size: 14px;
+  font-weight: 500;
+  color: #f59e0b;
+}
+
+.result-emoji {
+  font-size: 16px;
+}
+
+.match-teams {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 16px;
+  align-items: center;
+}
+
+.team {
+  text-align: center;
+}
+
+.team-players {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.team-1 .team-players {
+  align-items: flex-start;
+}
+
+.team-2 .team-players {
+  align-items: flex-end;
+}
+
+.player {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.match-score-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md, 10px);
+}
+
+.score-separator {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.match-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.action-btn.add-btn {
+  flex: 1;
+  padding: 12px 20px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md, 10px);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-btn.add-btn:hover:not(:disabled) {
+  background: var(--primary-hover, #7c3aed);
+  transform: translateY(-1px);
+}
+
+.action-btn.add-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Delete Confirmation Overlay */
@@ -920,17 +1071,19 @@ onMounted(() => {
 }
 
 .score-input {
-  width: 60px;
-  height: 50px;
+  width: 55px;
+  height: 48px;
   border: 2px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--bg-secondary);
   color: var(--text-primary);
-  font-size: 24px;
+  font-size: 1.4rem;
   font-weight: 700;
   text-align: center;
   outline: none;
+  appearance: textfield;
   -moz-appearance: textfield;
+  transition: all 0.2s;
 }
 
 .score-input::-webkit-outer-spin-button,
@@ -941,6 +1094,24 @@ onMounted(() => {
 
 .score-input:focus {
   border-color: var(--primary);
+}
+
+.score-input.winner {
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.5);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.score-input.loser {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.score-input.draw {
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.08);
 }
 
 .input-separator {
