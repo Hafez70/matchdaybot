@@ -169,6 +169,29 @@ export const api = {
       results
     })
     return response.data
+  },
+
+  /**
+   * Update a match score
+   * @param {number} matchId - Match ID
+   * @param {number} team1Score - New score for team 1
+   * @param {number} team2Score - New score for team 2
+   */
+  async updateMatch(matchId, team1Score, team2Score) {
+    const response = await apiClient.put(`/api/matches/${matchId}`, {
+      team1_score: team1Score,
+      team2_score: team2Score
+    })
+    return response.data
+  },
+
+  /**
+   * Delete a match
+   * @param {number} matchId - Match ID
+   */
+  async deleteMatch(matchId) {
+    const response = await apiClient.delete(`/api/matches/${matchId}`)
+    return response.data
   }
 }
 

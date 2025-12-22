@@ -158,6 +158,18 @@ class CreateMatchesResponse(BaseModel):
     matches_created: int
 
 
+class UpdateMatchRequest(BaseModel):
+    """Request to update a match score"""
+    team1_score: int
+    team2_score: int
+
+
+class DeleteMatchResponse(BaseModel):
+    """Response after deleting a match"""
+    success: bool
+    message: str
+
+
 class UserLeague(BaseModel):
     code: str
     name: str
@@ -844,6 +856,143 @@ async def create_matches(
             message=f"{len(match_ids)} مسابقه با موفقیت ثبت شد",
             match_ids=match_ids,
             matches_created=len(match_ids)
+        )
+
+
+@app.put("/api/matches/{match_id}", response_model=MatchInfo)
+async def update_match(
+    match_id: int,
+    request: UpdateMatchRequest,
+    user: TelegramUser = Depends(get_current_user)
+):
+    """
+    Update a match score.
+    
+    - User must be authenticated via Telegram
+    - User must be a member of the league the match belongs to
+    """
+    logger.info(f"📥 update_match called by user {user.id} for match {match_id}")
+    
+    # Validate scores
+    if request.team1_score < 0 or request.team2_score < 0:
+        raise HTTPException(status_code=400, detail="امتیاز نمی‌تواند منفی باشد")
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        # Get match info
+        cursor.execute("""
+            SELECT id, league_code, match_type, team1_score, team2_score, created_at
+            FROM matches WHERE id = ?
+        """, (match_id,))
+        match = cursor.fetchone()
+        
+        if not match:
+            raise HTTPException(status_code=404, detail="مسابقه پیدا نشد")
+        
+        league_code = match['league_code']
+        
+        # Check user is a member of the league
+        cursor.execute(
+            "SELECT 1 FROM league_members WHERE league_code = ? AND telegram_id = ?",
+            (league_code, user.id)
+        )
+        if not cursor.fetchone():
+            raise HTTPException(status_code=403, detail="شما عضو این لیگ نیستید")
+        
+        # Update match score
+        cursor.execute("""
+            UPDATE matches 
+            SET team1_score = ?, team2_score = ?
+            WHERE id = ?
+        """, (request.team1_score, request.team2_score, match_id))
+        
+        conn.commit()
+        
+        # Get team players for response
+        cursor.execute("""
+            SELECT u.name, mp.team_number
+            FROM match_players mp
+            JOIN users u ON mp.telegram_id = u.telegram_id
+            WHERE mp.match_id = ?
+        """, (match_id,))
+        
+        team1 = []
+        team2 = []
+        for player in cursor.fetchall():
+            if player['team_number'] == 1:
+                team1.append(player['name'])
+            else:
+                team2.append(player['name'])
+        
+        # Determine result emoji
+        if request.team1_score > request.team2_score:
+            result_emoji = "🏆"
+        elif request.team1_score < request.team2_score:
+            result_emoji = "❌"
+        else:
+            result_emoji = "🤝"
+        
+        logger.info(f"✅ Updated match {match_id}: {request.team1_score}-{request.team2_score}")
+        
+        return MatchInfo(
+            id=match_id,
+            match_type=match['match_type'],
+            team1=team1,
+            team2=team2,
+            team1_score=request.team1_score,
+            team2_score=request.team2_score,
+            created_at=match['created_at'],
+            result_emoji=result_emoji
+        )
+
+
+@app.delete("/api/matches/{match_id}", response_model=DeleteMatchResponse)
+async def delete_match(
+    match_id: int,
+    user: TelegramUser = Depends(get_current_user)
+):
+    """
+    Delete a match.
+    
+    - User must be authenticated via Telegram
+    - User must be a member of the league the match belongs to
+    """
+    logger.info(f"📥 delete_match called by user {user.id} for match {match_id}")
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        # Get match info
+        cursor.execute("SELECT id, league_code FROM matches WHERE id = ?", (match_id,))
+        match = cursor.fetchone()
+        
+        if not match:
+            raise HTTPException(status_code=404, detail="مسابقه پیدا نشد")
+        
+        league_code = match['league_code']
+        
+        # Check user is a member of the league
+        cursor.execute(
+            "SELECT 1 FROM league_members WHERE league_code = ? AND telegram_id = ?",
+            (league_code, user.id)
+        )
+        if not cursor.fetchone():
+            raise HTTPException(status_code=403, detail="شما عضو این لیگ نیستید")
+        
+        # Delete match players first (foreign key constraint)
+        cursor.execute("DELETE FROM match_players WHERE match_id = ?", (match_id,))
+        
+        # Delete the match
+        cursor.execute("DELETE FROM matches WHERE id = ?", (match_id,))
+        
+        conn.commit()
+        
+        logger.info(f"✅ Deleted match {match_id}")
+        
+        return DeleteMatchResponse(
+            success=True,
+            message="مسابقه با موفقیت حذف شد"
         )
 
 
