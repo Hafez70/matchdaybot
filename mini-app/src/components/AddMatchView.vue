@@ -393,49 +393,51 @@ onMounted(() => {
             <div class="match-meta">
               <span v-if="editingIndex !== null" class="edit-badge">✏️ ویرایش نتیجه {{ editingIndex + 1 }}</span>
               <span v-else class="new-badge">➕ نتیجه جدید</span>
-              <span v-if="getCurrentResultEmoji" class="result-emoji">{{ getCurrentResultEmoji }}</span>
             </div>
             <button v-if="editingIndex !== null" class="cancel-edit-btn" @click="cancelEdit">انصراف</button>
           </div>
-          <div class="teams-header">
-            <div class="team-side team1-side">
-              <span class="team-names">{{ team1Names }}</span>
+
+          <!-- Teams Layout: Players + VS + Players -->
+          <div class="input-teams-row">
+            <!-- Team 1 Players -->
+            <div class="input-team-col">
+              <div v-for="player in team1Players" :key="player" class="input-player-name">
+                {{ player }}
+              </div>
             </div>
-            <div class="vs-badge">VS</div>
-            <div class="team-side team2-side">
-              <span class="team-names">{{ team2Names }}</span>
+
+            <!-- VS Badge -->
+            <div class="input-vs-badge">VS</div>
+
+            <!-- Team 2 Players -->
+            <div class="input-team-col">
+              <div v-for="player in team2Players" :key="player" class="input-player-name">
+                {{ player }}
+              </div>
             </div>
           </div>
-          <!-- Teams and Score -->
-          <div class="match-teams">
-            <!-- Team 1 -->
-           
 
-            <!-- Score Input -->
-            <div class="match-score-input">
-              <input 
-                type="number" 
-                v-model="currentResult.team1_score"
-                min="0"
-                placeholder="0"
-                class="score-input"
-                :class="getInputScoreClass(1)"
-                inputmode="numeric"
-              />
-              <span class="score-separator">-</span>
-              <input 
-                type="number" 
-                v-model="currentResult.team2_score"
-                min="0"
-                placeholder="0"
-                class="score-input"
-                :class="getInputScoreClass(2)"
-                inputmode="numeric"
-              />
-            </div>
-
-            <!-- Team 2 -->
-           
+          <!-- Score Inputs Row -->
+          <div class="input-scores-row">
+            <input 
+              type="number" 
+              v-model="currentResult.team1_score"
+              min="0"
+              placeholder="0"
+              class="score-input-large"
+              :class="getInputScoreClass(1)"
+              inputmode="numeric"
+            />
+            <span class="score-dash">-</span>
+            <input 
+              type="number" 
+              v-model="currentResult.team2_score"
+              min="0"
+              placeholder="0"
+              class="score-input-large"
+              :class="getInputScoreClass(2)"
+              inputmode="numeric"
+            />
           </div>
 
           <!-- Action Button -->
@@ -838,6 +840,105 @@ onMounted(() => {
 }
 
 .score-separator {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+/* New Input Card Layout */
+.input-teams-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 0;
+}
+
+.input-team-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.input-team-col:first-child {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.input-team-col:last-child {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.input-player-name {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.input-vs-badge {
+  background: var(--primary);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 20px;
+}
+
+.input-scores-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0;
+}
+
+.score-input-large {
+  width: 70px;
+  height: 60px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 1.8rem;
+  font-weight: 700;
+  text-align: center;
+  outline: none;
+  appearance: textfield;
+  -moz-appearance: textfield;
+  transition: all 0.2s;
+}
+
+.score-input-large::-webkit-outer-spin-button,
+.score-input-large::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.score-input-large:focus {
+  border-color: var(--primary);
+}
+
+.score-input-large.winner {
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.5);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.score-input-large.loser {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.score-input-large.draw {
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.score-dash {
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--text-muted);
