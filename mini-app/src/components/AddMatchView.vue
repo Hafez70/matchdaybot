@@ -333,16 +333,6 @@ onMounted(() => {
 
     <!-- Step 3: Results Entry -->
     <div v-else-if="step === 'results'" class="results-container">
-      <!-- Part 1: Fixed Header - Teams -->
-      <div class="teams-header">
-        <div class="team-side team1-side">
-          <span class="team-names">{{ team1Names }}</span>
-        </div>
-        <div class="vs-badge">VS</div>
-        <div class="team-side team2-side">
-          <span class="team-names">{{ team2Names }}</span>
-        </div>
-      </div>
 
       <!-- Part 2: Scrollable Results List -->
       <div class="results-list">
@@ -366,19 +356,24 @@ onMounted(() => {
               <button class="confirm-no" @click="cancelDelete">انصراف</button>
             </div>
           </div>
-
+          <div class="teams-header">
+            <div class="team-side team1-side">
+              <span class="team-names">{{ team1Names }}</span>
+            </div>
+            <div class="vs-badge">VS</div>
+            <div class="team-side team2-side">
+              <span class="team-names">{{ team2Names }}</span>
+            </div>
+          </div>
           <div class="result-content">
             <div class="result-team">
-              <span class="result-team-name">{{ team1Names }}</span>
               <span class="result-score">{{ result.team1_score }}</span>
             </div>
             <div class="result-separator">
-              <span class="result-emoji">{{ getResultEmoji(result) }}</span>
               <span class="result-dash">-</span>
             </div>
             <div class="result-team">
               <span class="result-score">{{ result.team2_score }}</span>
-              <span class="result-team-name">{{ team2Names }}</span>
             </div>
           </div>
           <div class="result-actions">
@@ -402,17 +397,19 @@ onMounted(() => {
             </div>
             <button v-if="editingIndex !== null" class="cancel-edit-btn" @click="cancelEdit">انصراف</button>
           </div>
-
+          <div class="teams-header">
+            <div class="team-side team1-side">
+              <span class="team-names">{{ team1Names }}</span>
+            </div>
+            <div class="vs-badge">VS</div>
+            <div class="team-side team2-side">
+              <span class="team-names">{{ team2Names }}</span>
+            </div>
+          </div>
           <!-- Teams and Score -->
           <div class="match-teams">
             <!-- Team 1 -->
-            <div class="team team-1">
-              <div class="team-players">
-                <div v-for="player in team1Players" :key="player" class="player">
-                  {{ player }}
-                </div>
-              </div>
-            </div>
+           
 
             <!-- Score Input -->
             <div class="match-score-input">
@@ -438,13 +435,7 @@ onMounted(() => {
             </div>
 
             <!-- Team 2 -->
-            <div class="team team-2">
-              <div class="team-players">
-                <div v-for="player in team2Players" :key="player" class="player">
-                  {{ player }}
-                </div>
-              </div>
-            </div>
+           
           </div>
 
           <!-- Action Button -->
@@ -469,9 +460,6 @@ onMounted(() => {
 
       <!-- Part 3: Fixed Footer - Final Submit -->
       <div class="submit-footer">
-        <div class="results-summary" v-if="resultsList.length > 0">
-          <span class="summary-count">{{ resultsList.length }} نتیجه</span>
-        </div>
         <button 
           class="final-submit-btn"
           :class="{ disabled: !canFinalSubmit, loading: submitting }"
@@ -479,7 +467,7 @@ onMounted(() => {
           @click="finalSubmit"
         >
           <span v-if="submitting" class="btn-spinner"></span>
-          <span v-else>✅ ثبت نهایی مسابقات</span>
+          <span v-else>✅ ثبت نهایی <span class="summary-count">{{ resultsList.length }} نتیجه</span></span>
         </button>
       </div>
     </div>
